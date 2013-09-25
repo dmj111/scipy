@@ -47,6 +47,7 @@ void fcn_callback(int *n, int *m, int *np, int *nq, int *ldn, int *ldm,
   PyObject *result;
   PyArrayObject *result_array = NULL;
   PyArrayObject *pyXplusD;
+  void *beta_dst;
 
   arg01 = PyTuple_New(2);
 
@@ -83,8 +84,10 @@ void fcn_callback(int *n, int *m, int *np, int *nq, int *ldn, int *ldm,
   Py_DECREF(arg01);
   *istop = 0;
 
-  memcpy(((PyArrayObject *) (odr_global.pyBeta))->data, (void *)beta,
-         (*np) * sizeof(double));
+  beta_dst = ((PyArrayObject *) (odr_global.pyBeta))->data;
+  if (beta != beta_dst) {
+      memcpy(beta_dst, (void *)beta, (*np) * sizeof(double));
+  }
 
   if ((*ideval % 10) >= 1)
     {
@@ -98,8 +101,6 @@ void fcn_callback(int *n, int *m, int *np, int *nq, int *ldn, int *ldm,
 
       if ((result = PyEval_CallObject(odr_global.fcn, arglist)) == NULL)
         {
-          PyObject *tmpobj, *str1;
-
           if (PyErr_ExceptionMatches(odr_stop))
             {
               /* stop, don't fail */
@@ -108,23 +109,6 @@ void fcn_callback(int *n, int *m, int *np, int *nq, int *ldn, int *ldm,
               Py_DECREF(arglist);
               return;
             }
-
-          PyErr_Print();
-          tmpobj = PyObject_GetAttrString(odr_global.fcn, "__name__");
-          if (tmpobj == NULL)
-            goto fail;
-
-          str1 =
-            PyString_FromString
-            ("Error occurred while calling the Python function named ");
-          if (str1 == NULL)
-            {
-              Py_DECREF(tmpobj);
-              goto fail;
-            }
-          PyString_ConcatAndDel(&str1, tmpobj);
-          PyErr_SetString(odr_error, PyString_AsString(str1));
-          Py_DECREF(str1);
           goto fail;
         }
 
@@ -153,8 +137,6 @@ void fcn_callback(int *n, int *m, int *np, int *nq, int *ldn, int *ldm,
 
       if ((result = PyEval_CallObject(odr_global.fjacb, arglist)) == NULL)
         {
-          PyObject *tmpobj, *str1;
-
           if (PyErr_ExceptionMatches(odr_stop))
             {
               /* stop, don't fail */
@@ -163,23 +145,6 @@ void fcn_callback(int *n, int *m, int *np, int *nq, int *ldn, int *ldm,
               Py_DECREF(arglist);
               return;
             }
-
-          PyErr_Print();
-          tmpobj = PyObject_GetAttrString(odr_global.fjacb, "__name__");
-          if (tmpobj == NULL)
-            goto fail;
-
-          str1 =
-            PyString_FromString
-            ("Error occurred while calling the Python function named ");
-          if (str1 == NULL)
-            {
-              Py_DECREF(tmpobj);
-              goto fail;
-            }
-          PyString_ConcatAndDel(&str1, tmpobj);
-          PyErr_SetString(odr_error, PyString_AsString(str1));
-          Py_DECREF(str1);
           goto fail;
         }
 
@@ -231,8 +196,6 @@ void fcn_callback(int *n, int *m, int *np, int *nq, int *ldn, int *ldm,
 
       if ((result = PyEval_CallObject(odr_global.fjacd, arglist)) == NULL)
         {
-          PyObject *tmpobj, *str1;
-
           if (PyErr_ExceptionMatches(odr_stop))
             {
               /* stop, don't fail */
@@ -241,23 +204,6 @@ void fcn_callback(int *n, int *m, int *np, int *nq, int *ldn, int *ldm,
               Py_DECREF(arglist);
               return;
             }
-
-          PyErr_Print();
-          tmpobj = PyObject_GetAttrString(odr_global.fjacd, "__name__");
-          if (tmpobj == NULL)
-            goto fail;
-
-          str1 =
-            PyString_FromString
-            ("Error occurred while calling the Python function named ");
-          if (str1 == NULL)
-            {
-              Py_DECREF(tmpobj);
-              goto fail;
-            }
-          PyString_ConcatAndDel(&str1, tmpobj);
-          PyErr_SetString(odr_error, PyString_AsString(str1));
-          Py_DECREF(str1);
           goto fail;
         }
 
@@ -1348,11 +1294,25 @@ static void check_args(int n, int m, int np, int nq,
   Py_XDECREF(printdict);
 }
 
-static char odr__doc__[] =
-  "odr(fcn, beta0, y, x,\nwe=None, wd=None, fjacb=None, fjacd=None,\nextra_args=None, ifixx=None, ifixb=None, job=0, iprint=0,\nerrfile=None, rptfile=None, ndigit=0,\ntaufac=0.0, sstol=-1.0, partol=-1.0,\nmaxit=-1, stpb=None, stpd=None,\nsclb=None, scld=None, work=None, iwork=None,\nfull_output=0)";
+PyObject *set_exceptions(PyObject * self, PyObject * args, PyObject * kwds)
+{
+    PyObject *exc_error, *exc_stop;
+
+    if (!PyArg_ParseTuple(args, "OO", &exc_error, &exc_stop))
+	return NULL;
+
+    Py_INCREF(exc_stop);
+    Py_INCREF(exc_error);
+    odr_stop = exc_stop;
+    odr_error = exc_error;
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
 
 static PyMethodDef methods[] = {
-  {"odr", (PyCFunction) odr, METH_VARARGS | METH_KEYWORDS, odr__doc__},
+  {"_set_exceptions", (PyCFunction) set_exceptions, METH_VARARGS, NULL},
+  {"odr", (PyCFunction) odr, METH_VARARGS | METH_KEYWORDS, NULL},
   {NULL, NULL},
 };
 
@@ -1372,30 +1332,15 @@ static struct PyModuleDef moduledef = {
 PyObject *PyInit___odrpack(void)
 {
     PyObject *m, *s, *d;
-
-    m = PyModule_Create(&moduledef);
     import_array();
-
-    d = PyModule_GetDict(m);
-    odr_error = PyErr_NewException("odr.odrpack.odr_error", NULL, NULL);
-    odr_stop = PyErr_NewException("odr.odrpack.odr_stop", NULL, NULL);
-    PyDict_SetItemString(d, "odr_error", odr_error);
-    PyDict_SetItemString(d, "odr_stop", odr_stop);
-
+    m = PyModule_Create(&moduledef);
     return m;
 }
 #else
 PyMODINIT_FUNC init__odrpack(void)
 {
-  PyObject *m, *d;
-
-  import_array();
-
-  m = Py_InitModule("__odrpack", methods);
-  d = PyModule_GetDict(m);
-  odr_error = PyErr_NewException("odr.odrpack.odr_error", NULL, NULL);
-  odr_stop = PyErr_NewException("odr.odrpack.odr_stop", NULL, NULL);
-  PyDict_SetItemString(d, "odr_error", odr_error);
-  PyDict_SetItemString(d, "odr_stop", odr_stop);
+    PyObject *m, *d;
+    import_array();
+    m = Py_InitModule("__odrpack", methods);
 }
 #endif

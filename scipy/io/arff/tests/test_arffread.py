@@ -1,7 +1,14 @@
 #!/usr/bin/env python
+from __future__ import division, print_function, absolute_import
+
 import os
+import sys
 from os.path import join as pjoin
-from cStringIO import StringIO
+
+if sys.version_info[0] >= 3:
+    from io import StringIO
+else:
+    from cStringIO import StringIO
 
 import numpy as np
 
@@ -29,6 +36,7 @@ expect_missing_raw = np.array([[1, 5], [2, 4], [np.nan, np.nan]])
 expect_missing = np.empty(3, [('yop', np.float), ('yap', np.float)])
 expect_missing['yop'] = expect_missing_raw[:, 0]
 expect_missing['yap'] = expect_missing_raw[:, 1]
+
 
 class DataTest(TestCase):
     def test1(self):
@@ -63,6 +71,7 @@ class MissingDataTest(TestCase):
         data, meta = loadarff(missing)
         for i in ['yop', 'yap']:
             assert_array_almost_equal(data[i], expect_missing[i])
+
 
 class HeaderTest(TestCase):
     def test_type_parsing(self):

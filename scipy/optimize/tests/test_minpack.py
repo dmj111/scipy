@@ -1,11 +1,13 @@
 """
 Unit tests for optimization routines from minpack.py.
 """
+from __future__ import division, print_function, absolute_import
 
 from numpy.testing import assert_, assert_almost_equal, assert_array_equal, \
-        assert_array_almost_equal, TestCase, run_module_suite, assert_raises
+        assert_array_almost_equal, TestCase, run_module_suite, assert_raises, \
+        assert_allclose
 import numpy as np
-from numpy import array, float64
+from numpy import array, float64, matrix
 
 from scipy import optimize
 from scipy.optimize.minpack import leastsq, curve_fit, fixed_point
@@ -23,6 +25,7 @@ class ReturnShape(object):
     def __call__(self, x):
         return np.ones(self.shape)
 
+
 def dummy_func(x, shape):
     """A function that returns an array of ones of the given shape.
     `x` is ignored.
@@ -31,6 +34,8 @@ def dummy_func(x, shape):
 
 # Function and jacobian for tests of solvers for systems of nonlinear
 # equations
+
+
 def pressure_network(flow_rates, Qtot, k):
     """Evaluate non-linear equation system representing
     the pressures and flows in a system of n parallel pipes::
@@ -61,6 +66,7 @@ def pressure_network(flow_rates, Qtot, k):
     F = np.hstack((P[1:] - P[0], flow_rates.sum() - Qtot))
     return F
 
+
 def pressure_network_jacobian(flow_rates, Qtot, k):
     """Return the jacobian of the equation system F(flow_rates)
     computed by `pressure_network` with respect to
@@ -83,9 +89,11 @@ def pressure_network_jacobian(flow_rates, Qtot, k):
 
     return jac
 
+
 def pressure_network_fun_and_grad(flow_rates, Qtot, k):
     return pressure_network(flow_rates, Qtot, k), \
         pressure_network_jacobian(flow_rates, Qtot, k)
+
 
 class TestFSolve(TestCase):
     def test_pressure_network_no_gradient(self):
@@ -134,6 +142,12 @@ class TestFSolve(TestCase):
         deriv_func = lambda x: dummy_func(x, (3,3))
         assert_raises(TypeError, optimize.fsolve, func, x0=[0,1], fprime=deriv_func)
 
+    def test_float32(self):
+        func = lambda x: np.array([x[0] - 100, x[1] - 1000], dtype=np.float32)**2
+        p = optimize.fsolve(func, np.array([1, 1], np.float32))
+        assert_allclose(func(p), [0, 0], atol=1e-3)
+
+
 class TestRootHybr(TestCase):
     def test_pressure_network_no_gradient(self):
         """root/hybr without gradient, equal pipes -> equal flows"""
@@ -148,7 +162,7 @@ class TestRootHybr(TestCase):
         """root/hybr with gradient, equal pipes -> equal flows"""
         k = np.ones(4) * 0.5
         Qtot = 4
-        initial_guess = array([2., 0., 2., 0.])
+        initial_guess = matrix([2., 0., 2., 0.])
         final_flows = optimize.root(pressure_network, initial_guess,
                                     args=(Qtot, k), method='hybr',
                                     jac=pressure_network_jacobian).x
@@ -175,6 +189,7 @@ class TestRootLM(TestCase):
                                     method='lm', args=(Qtot, k)).x
         assert_array_almost_equal(final_flows, np.ones(4))
 
+
 class TestLeastSq(TestCase):
     def setUp(self):
         x = np.linspace(0, 10, 40)
@@ -194,17 +209,17 @@ class TestLeastSq(TestCase):
         p0 = array([0,0,0])
         params_fit, ier = leastsq(self.residuals, p0,
                                   args=(self.y_meas, self.x))
-        assert_(ier in (1,2,3,4), 'solution not found (ier=%d)'%ier)
+        assert_(ier in (1,2,3,4), 'solution not found (ier=%d)' % ier)
         # low precision due to random
         assert_array_almost_equal(params_fit, self.abc, decimal=2)
 
     def test_full_output(self):
-        p0 = array([0,0,0])
+        p0 = matrix([0,0,0])
         full_output = leastsq(self.residuals, p0,
                               args=(self.y_meas, self.x),
                               full_output=True)
         params_fit, cov_x, infodict, mesg, ier = full_output
-        assert_(ier in (1,2,3,4), 'solution not found: %s'%mesg)
+        assert_(ier in (1,2,3,4), 'solution not found: %s' % mesg)
 
     def test_input_untouched(self):
         p0 = array([0,0,0],dtype=float64)
@@ -213,7 +228,7 @@ class TestLeastSq(TestCase):
                               args=(self.y_meas, self.x),
                               full_output=True)
         params_fit, cov_x, infodict, mesg, ier = full_output
-        assert_(ier in (1,2,3,4), 'solution not found: %s'%mesg)
+        assert_(ier in (1,2,3,4), 'solution not found: %s' % mesg)
         assert_array_equal(p0, p0_copy)
 
     def test_wrong_shape_func_callable(self):
@@ -240,6 +255,22 @@ class TestLeastSq(TestCase):
         func = lambda x: dummy_func(x, (2,))
         deriv_func = lambda x: dummy_func(x, (3,3))
         assert_raises(TypeError, optimize.leastsq, func, x0=[0,1], Dfun=deriv_func)
+
+    def test_float32(self):
+        # From Track ticket #920
+        def func(p,x,y):
+            q = p[0]*np.exp(-(x-p[1])**2/(2.0*p[2]**2))+p[3]
+            return q - y
+
+        x = np.array([1.475,1.429,1.409,1.419,1.455,1.519,1.472, 1.368,1.286,
+                       1.231], dtype=np.float32)
+        y = np.array([0.0168,0.0193,0.0211,0.0202,0.0171,0.0151,0.0185,0.0258,
+                      0.034,0.0396], dtype=np.float32)
+        p0 = np.array([1.0,1.0,1.0,1.0])
+        p1, success = optimize.leastsq(func, p0, args=(x,y))
+
+        assert_(success in [1,2,3,4])
+        assert_((func(p1,x,y)**2).sum() < 1e-4 * (func(p0,x,y)**2).sum())
 
 
 class TestCurveFit(TestCase):
@@ -285,6 +316,25 @@ class TestCurveFit(TestCase):
         assert_array_almost_equal(popt, [1.7989, 1.1642], decimal=4)
         assert_array_almost_equal(pcov, [[0.0852, -0.1260], [-0.1260, 0.1912]],
                                   decimal=4)
+
+    def test_regression_2639(self):
+        # This test fails if epsfcn in leastsq is too large.
+        x = [574.14200000000005, 574.154, 574.16499999999996,
+             574.17700000000002, 574.18799999999999, 574.19899999999996,
+             574.21100000000001, 574.22199999999998, 574.23400000000004,
+             574.245]
+        y = [859.0, 997.0, 1699.0, 2604.0, 2013.0, 1964.0, 2435.0,
+             1550.0, 949.0, 841.0]
+        guess = [574.1861428571428, 574.2155714285715, 1302.0, 1302.0,
+                 0.0035019999999983615, 859.0]
+        good = [ 5.74177150e+02, 5.74209188e+02, 1.74187044e+03, 1.58646166e+03,
+                 1.0068462e-02, 8.57450661e+02]
+
+        def f_double_gauss(x, x0, x1, A0, A1, sigma, c):
+            return (A0*np.exp(-(x-x0)**2/(2.*sigma**2))
+                    + A1*np.exp(-(x-x1)**2/(2.*sigma**2)) + c)
+        popt, pcov = curve_fit(f_double_gauss, x, y, guess, maxfev=10000)
+        assert_allclose(popt, good, rtol=1e-5)
 
 
 class TestFixedPoint(TestCase):

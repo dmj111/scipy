@@ -1,11 +1,16 @@
 # Author: Travis Oliphant
 # 1999 -- 2002
 
+from __future__ import division, print_function, absolute_import
 
-import sigtools
+import warnings
+
+from . import sigtools
+from scipy.lib.six import callable
 from scipy import linalg
 from scipy.fftpack import fft, ifft, ifftshift, fft2, ifft2, fftn, \
         ifftn, fftfreq
+from numpy.fft import rfftn, irfftn
 from numpy import polyadd, polymul, polydiv, polysub, roots, \
         poly, polyval, polyder, cast, asarray, isscalar, atleast_1d, \
         ones, real_if_close, zeros, array, arange, where, rank, \
@@ -14,8 +19,8 @@ from numpy import polyadd, polymul, polydiv, polysub, roots, \
         transpose, dot, mean, ndarray, atleast_2d
 import numpy as np
 from scipy.misc import factorial
-from windows import get_window
-from _arraytools import axis_slice, axis_reverse, odd_ext, even_ext, const_ext
+from .windows import get_window
+from ._arraytools import axis_slice, axis_reverse, odd_ext, even_ext, const_ext
 
 __all__ = ['correlate', 'fftconvolve', 'convolve', 'convolve2d', 'correlate2d',
            'order_filter', 'medfilt', 'medfilt2d', 'wiener', 'lfilter',
@@ -52,53 +57,70 @@ def _bvalfromboundary(boundary):
     return val
 
 
+def _check_valid_mode_shapes(shape1, shape2):
+    for d1, d2 in zip(shape1, shape2):
+        if not d1 >= d2:
+            raise ValueError(
+                "in1 should have at least as many items as in2 in "
+                "every dimension for 'valid' mode.")
+
+
 def correlate(in1, in2, mode='full'):
     """
     Cross-correlate two N-dimensional arrays.
 
-    Cross-correlate in1 and in2 with the output size determined by the mode
-    argument.
+    Cross-correlate `in1` and `in2`, with the output size determined by the
+    `mode` argument.
 
     Parameters
     ----------
-    in1: array
-        first input.
-    in2: array
-        second input. Should have the same number of dimensions as in1.
-    mode: str {'valid', 'same', 'full'}, optional
+    in1 : array_like
+        First input.
+    in2 : array_like
+        Second input. Should have the same number of dimensions as `in1`;
+        if sizes of `in1` and `in2` are not equal then `in1` has to be the
+        larger array.
+    mode : str {'full', 'valid', 'same'}, optional
         A string indicating the size of the output:
 
-            - 'valid': the output consists only of those elements that do not
-              rely on the zero-padding.
-            - 'same': the output is the same size as ``in1`` centered
-              with respect to the 'full' output.
-            - 'full': the output is the full discrete linear cross-correlation
-              of the inputs (default).
+        ``full``
+           The output is the full discrete linear cross-correlation
+           of the inputs. (Default)
+        ``valid``
+           The output consists only of those elements that do not
+           rely on the zero-padding.
+        ``same``
+           The output is the same size as `in1`, centered
+           with respect to the 'full' output.
 
     Returns
     -------
-    out: array
-        an N-dimensional array containing a subset of the discrete linear
-        cross-correlation of in1 with in2.
+    correlate : array
+        An N-dimensional array containing a subset of the discrete linear
+        cross-correlation of `in1` with `in2`.
 
     Notes
     -----
-    The correlation z of two arrays x and y of rank d is defined as::
+    The correlation z of two arrays x and y of rank d is defined as:
 
       z[...,k,...] = sum[..., i_l, ...]
-            x[..., i_l,...] * conj(y[..., i_l + k,...])
+                         x[..., i_l,...] * conj(y[..., i_l + k,...])
 
     """
+    in1 = asarray(in1)
+    in2 = asarray(in2)
+
     val = _valfrommode(mode)
 
+    if rank(in1) == rank(in2) == 0:
+        return in1 * in2
+    elif not in1.ndim == in2.ndim:
+        raise ValueError("in1 and in2 should have the same rank")
+
     if mode == 'valid':
+        _check_valid_mode_shapes(in1.shape, in2.shape)
         ps = [i - j + 1 for i, j in zip(in1.shape, in2.shape)]
         out = np.empty(ps, in1.dtype)
-        for i in range(len(ps)):
-            if ps[i] <= 0:
-                raise ValueError("Dimension of x(%d) < y(%d) " \
-                                 "not compatible with valid mode" % \
-                                 (in1.shape[i], in2.shape[i]))
 
         z = sigtools._correlateND(in1, in2, out, val)
     else:
@@ -110,13 +132,10 @@ def correlate(in1, in2, mode='full'):
 
         if mode == 'full':
             out = np.empty(ps, in1.dtype)
-            z = sigtools._correlateND(in1zpadded, in2, out, val)
         elif mode == 'same':
             out = np.empty(in1.shape, in1.dtype)
 
-            z = sigtools._correlateND(in1zpadded, in2, out, val)
-        else:
-            raise ValueError("Uknown mode %s" % mode)
+        z = sigtools._correlateND(in1zpadded, in2, out, val)
 
     return z
 
@@ -125,73 +144,120 @@ def _centered(arr, newsize):
     # Return the center newsize portion of the array.
     newsize = asarray(newsize)
     currsize = array(arr.shape)
-    startind = (currsize - newsize) / 2
+    startind = (currsize - newsize) // 2
     endind = startind + newsize
     myslice = [slice(startind[k], endind[k]) for k in range(len(endind))]
     return arr[tuple(myslice)]
 
 
 def fftconvolve(in1, in2, mode="full"):
-    """Convolve two N-dimensional arrays using FFT. See convolve.
+    """Convolve two N-dimensional arrays using FFT.
+
+    Convolve `in1` and `in2` using the fast Fourier transform method, with
+    the output size determined by the `mode` argument.
+
+    This is generally much faster than `convolve` for large arrays (n > ~500),
+    but can be slower when only a few output values are needed, and can only
+    output float arrays (int or object array inputs will be cast to float).
+
+    Parameters
+    ----------
+    in1 : array_like
+        First input.
+    in2 : array_like
+        Second input. Should have the same number of dimensions as `in1`;
+        if sizes of `in1` and `in2` are not equal then `in1` has to be the
+        larger array.
+    mode : str {'full', 'valid', 'same'}, optional
+        A string indicating the size of the output:
+
+        ``full``
+           The output is the full discrete linear convolution
+           of the inputs. (Default)
+        ``valid``
+           The output consists only of those elements that do not
+           rely on the zero-padding.
+        ``same``
+           The output is the same size as `in1`, centered
+           with respect to the 'full' output.
+
+    Returns
+    -------
+    out : array
+        An N-dimensional array containing a subset of the discrete linear
+        convolution of `in1` with `in2`.
 
     """
+    in1 = asarray(in1)
+    in2 = asarray(in2)
+
+    if rank(in1) == rank(in2) == 0:  # scalar inputs
+        return in1 * in2
+    elif not in1.ndim == in2.ndim:
+        raise ValueError("in1 and in2 should have the same rank")
+    elif in1.size == 0 or in2.size == 0:  # empty arrays
+        return array([])
+
     s1 = array(in1.shape)
     s2 = array(in2.shape)
     complex_result = (np.issubdtype(in1.dtype, np.complex) or
                       np.issubdtype(in2.dtype, np.complex))
     size = s1 + s2 - 1
 
+    if mode == "valid":
+        _check_valid_mode_shapes(s1, s2)
+
     # Always use 2**n-sized FFT
-    fsize = 2 ** np.ceil(np.log2(size))
-    IN1 = fftn(in1, fsize)
-    IN1 *= fftn(in2, fsize)
+    fsize = 2 ** np.ceil(np.log2(size)).astype(int)
     fslice = tuple([slice(0, int(sz)) for sz in size])
-    ret = ifftn(IN1)[fslice].copy()
-    del IN1
     if not complex_result:
+        ret = irfftn(rfftn(in1, fsize) *
+                     rfftn(in2, fsize), fsize)[fslice].copy()
         ret = ret.real
+    else:
+        ret = ifftn(fftn(in1, fsize) * fftn(in2, fsize))[fslice].copy()
+
     if mode == "full":
         return ret
     elif mode == "same":
-        if product(s1, axis=0) > product(s2, axis=0):
-            osize = s1
-        else:
-            osize = s2
-        return _centered(ret, osize)
+        return _centered(ret, s1)
     elif mode == "valid":
-        return _centered(ret, abs(s2 - s1) + 1)
+        return _centered(ret, s1 - s2 + 1)
 
 
 def convolve(in1, in2, mode='full'):
     """
     Convolve two N-dimensional arrays.
 
-    Convolve in1 and in2 with output size determined by mode.
+    Convolve `in1` and `in2`, with the output size determined by the
+    `mode` argument.
 
     Parameters
     ----------
-    in1: array
-        first input.
-    in2: array
-        second input. Should have the same number of dimensions as in1.
-    mode: str {'valid', 'same', 'full'}
-        a string indicating the size of the output:
+    in1 : array_like
+        First input.
+    in2 : array_like
+        Second input. Should have the same number of dimensions as `in1`;
+        if sizes of `in1` and `in2` are not equal then `in1` has to be the
+        larger array.
+    mode : str {'full', 'valid', 'same'}, optional
+        A string indicating the size of the output:
 
-        ``valid`` : the output consists only of those elements that do not
-           rely on the zero-padding.
-
-        ``same`` : the output is the same size as ``in1`` centered
-           with respect to the 'full' output.
-
-        ``full`` : the output is the full discrete linear cross-correlation
+        ``full``
+           The output is the full discrete linear convolution
            of the inputs. (Default)
-
+        ``valid``
+           The output consists only of those elements that do not
+           rely on the zero-padding.
+        ``same``
+           The output is the same size as `in1`, centered
+           with respect to the 'full' output.
 
     Returns
     -------
-    out: array
-        an N-dimensional array containing a subset of the discrete linear
-        cross-correlation of in1 with in2.
+    convolve : array
+        An N-dimensional array containing a subset of the discrete linear
+        convolution of `in1` with `in2`.
 
     """
     volume = asarray(in1)
@@ -199,17 +265,9 @@ def convolve(in1, in2, mode='full'):
 
     if rank(volume) == rank(kernel) == 0:
         return volume * kernel
-    elif not volume.ndim == kernel.ndim:
-        raise ValueError("in1 and in2 should have the same rank")
 
     slice_obj = [slice(None, None, -1)] * len(kernel.shape)
 
-    if mode == 'valid':
-        for d1, d2 in zip(volume.shape, kernel.shape):
-            if not d1 >= d2:
-                raise ValueError(
-                    "in1 should have at least as many items as in2 in " \
-                    "every dimension for valid mode.")
     if np.iscomplexobj(kernel):
         return correlate(volume, kernel[slice_obj].conj(), mode)
     else:
@@ -246,7 +304,7 @@ def order_filter(a, domain, rank):
 
     Examples
     --------
-    >>> import scipy.signal
+    >>> from scipy import signal
     >>> x = np.arange(25).reshape(5, 5)
     >>> domain = np.identity(3)
     >>> x
@@ -255,13 +313,13 @@ def order_filter(a, domain, rank):
            [10, 11, 12, 13, 14],
            [15, 16, 17, 18, 19],
            [20, 21, 22, 23, 24]])
-    >>> sp.signal.order_filter(x, domain, 0)
+    >>> signal.order_filter(x, domain, 0)
     array([[  0.,   0.,   0.,   0.,   0.],
            [  0.,   0.,   1.,   2.,   0.],
            [  0.,   5.,   6.,   7.,   0.],
            [  0.,  10.,  11.,  12.,   0.],
            [  0.,   0.,   0.,   0.,   0.]])
-    >>> sp.signal.order_filter(x, domain, 2)
+    >>> signal.order_filter(x, domain, 2)
     array([[  6.,   7.,   8.,   9.,   4.],
            [ 11.,  12.,  13.,  14.,   9.],
            [ 16.,  17.,  18.,  19.,  14.],
@@ -283,7 +341,7 @@ def medfilt(volume, kernel_size=None):
     Perform a median filter on an N-dimensional array.
 
     Apply a median filter to the input array using a local window-size
-    given by kernel_size.
+    given by `kernel_size`.
 
     Parameters
     ----------
@@ -306,9 +364,8 @@ def medfilt(volume, kernel_size=None):
     if kernel_size is None:
         kernel_size = [3] * len(volume.shape)
     kernel_size = asarray(kernel_size)
-    if len(kernel_size.shape) == 0:
-        kernel_size = [kernel_size.item()] * len(volume.shape)
-    kernel_size = asarray(kernel_size)
+    if kernel_size.shape == ():
+        kernel_size = np.repeat(kernel_size.item(), volume.ndim)
 
     for k in range(len(volume.shape)):
         if (kernel_size[k] % 2) != 1:
@@ -317,7 +374,7 @@ def medfilt(volume, kernel_size=None):
     domain = ones(kernel_size)
 
     numels = product(kernel_size, axis=0)
-    order = int(numels / 2)
+    order = numels // 2
     return sigtools._order_filterND(volume, domain, order)
 
 
@@ -350,6 +407,8 @@ def wiener(im, mysize=None, noise=None):
     if mysize is None:
         mysize = [3] * len(im.shape)
     mysize = asarray(mysize)
+    if mysize.shape == ():
+        mysize = np.repeat(mysize.item(), im.ndim)
 
     # Estimate the local mean
     lMean = correlate(im, ones(mysize), 'same') / product(mysize, axis=0)
@@ -359,7 +418,7 @@ def wiener(im, mysize=None, noise=None):
             - lMean ** 2)
 
     # Estimate the noise power if needed.
-    if noise == None:
+    if noise is None:
         noise = mean(ravel(lVar), axis=0)
 
     res = (im - lMean)
@@ -371,33 +430,38 @@ def wiener(im, mysize=None, noise=None):
 
 
 def convolve2d(in1, in2, mode='full', boundary='fill', fillvalue=0):
-    """Convolve two 2-dimensional arrays.
+    """
+    Convolve two 2-dimensional arrays.
 
-    Convolve `in1` and `in2` with output size determined by mode and boundary
-    conditions determined by `boundary` and `fillvalue`.
+    Convolve `in1` and `in2` with output size determined by `mode`, and
+    boundary conditions determined by `boundary` and `fillvalue`.
 
     Parameters
     ----------
-    in1, in2 : ndarray
+    in1, in2 : array_like
         Two-dimensional input arrays to be convolved.
-    mode: str, optional
+    mode : str {'full', 'valid', 'same'}, optional
         A string indicating the size of the output:
 
-        ``valid`` : the output consists only of those elements that do not
+        ``full``
+           The output is the full discrete linear convolution
+           of the inputs. (Default)
+        ``valid``
+           The output consists only of those elements that do not
            rely on the zero-padding.
-
-        ``same`` : the output is the same size as ``in1`` centered
+        ``same``
+           The output is the same size as `in1`, centered
            with respect to the 'full' output.
 
-        ``full`` : the output is the full discrete linear cross-correlation
-           of the inputs. (Default)
-
-    boundary : str, optional
+    boundary : str {'fill', 'wrap', 'symm'}, optional
         A flag indicating how to handle boundaries:
 
-          - 'fill' : pad input arrays with fillvalue. (default)
-          - 'wrap' : circular boundary conditions.
-          - 'symm' : symmetrical boundary conditions.
+        ``fill``
+           pad input arrays with fillvalue. (default)
+        ``wrap``
+           circular boundary conditions.
+        ``symm``
+           symmetrical boundary conditions.
 
     fillvalue : scalar, optional
         Value to fill pad input arrays with. Default is 0.
@@ -409,69 +473,89 @@ def convolve2d(in1, in2, mode='full', boundary='fill', fillvalue=0):
         convolution of `in1` with `in2`.
 
     """
+    in1 = asarray(in1)
+    in2 = asarray(in2)
+
     if mode == 'valid':
-        for d1, d2 in zip(np.shape(in1), np.shape(in2)):
-            if not d1 >= d2:
-                raise ValueError(
-                    "in1 should have at least as many items as in2 in " \
-                    "every dimension for valid mode.")
+        _check_valid_mode_shapes(in1.shape, in2.shape)
 
     val = _valfrommode(mode)
     bval = _bvalfromboundary(boundary)
 
-    return sigtools._convolve2d(in1, in2, 1, val, bval, fillvalue)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', np.ComplexWarning)
+        # FIXME: some cast generates a warning here
+        out = sigtools._convolve2d(in1, in2, 1, val, bval, fillvalue)
+
+    return out
 
 
 def correlate2d(in1, in2, mode='full', boundary='fill', fillvalue=0):
-    """Cross-correlate two 2-dimensional arrays.
+    """
+    Cross-correlate two 2-dimensional arrays.
 
-    Cross correlate in1 and in2 with output size determined by mode and
+    Cross correlate `in1` and `in2` with output size determined by `mode`, and
     boundary conditions determined by `boundary` and `fillvalue`.
 
     Parameters
     ----------
-    in1, in2 : ndarray
+    in1, in2 : array_like
         Two-dimensional input arrays to be convolved.
-    mode: str, optional
+    mode : str {'full', 'valid', 'same'}, optional
         A string indicating the size of the output:
 
-        ``valid`` : the output consists only of those elements that do not
+        ``full``
+           The output is the full discrete linear cross-correlation
+           of the inputs. (Default)
+        ``valid``
+           The output consists only of those elements that do not
            rely on the zero-padding.
-
-        ``same`` : the output is the same size as ``in1`` centered
+        ``same``
+           The output is the same size as `in1`, centered
            with respect to the 'full' output.
 
-        ``full`` : the output is the full discrete linear cross-correlation
-           of the inputs. (Default)
-
-    boundary : str, optional
+    boundary : str {'fill', 'wrap', 'symm'}, optional
         A flag indicating how to handle boundaries:
 
-          - 'fill' : pad input arrays with fillvalue. (default)
-          - 'wrap' : circular boundary conditions.
-          - 'symm' : symmetrical boundary conditions.
+        ``fill``
+           pad input arrays with fillvalue. (default)
+        ``wrap``
+           circular boundary conditions.
+        ``symm``
+           symmetrical boundary conditions.
 
     fillvalue : scalar, optional
         Value to fill pad input arrays with. Default is 0.
 
     Returns
     -------
-    out : ndarray
+    correlate2d : ndarray
         A 2-dimensional array containing a subset of the discrete linear
         cross-correlation of `in1` with `in2`.
 
     """
+    in1 = asarray(in1)
+    in2 = asarray(in2)
+
+    if mode == 'valid':
+        _check_valid_mode_shapes(in1.shape, in2.shape)
+
     val = _valfrommode(mode)
     bval = _bvalfromboundary(boundary)
 
-    return sigtools._convolve2d(in1, in2, 0, val, bval, fillvalue)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', np.ComplexWarning)
+        # FIXME: some cast generates a warning here
+        out = sigtools._convolve2d(in1, in2, 0, val, bval, fillvalue)
+
+    return out
 
 
 def medfilt2d(input, kernel_size=3):
     """
     Median filter a 2-dimensional array.
 
-    Apply a median filter to the input array using a local window-size
+    Apply a median filter to the `input` array using a local window-size
     given by `kernel_size` (must be odd).
 
     Parameters
@@ -496,9 +580,8 @@ def medfilt2d(input, kernel_size=3):
     if kernel_size is None:
         kernel_size = [3] * 2
     kernel_size = asarray(kernel_size)
-    if len(kernel_size.shape) == 0:
-        kernel_size = [kernel_size.item()] * 2
-    kernel_size = asarray(kernel_size)
+    if kernel_size.shape == ():
+        kernel_size = np.repeat(kernel_size.item(), 2)
 
     for size in kernel_size:
         if (size % 2) != 1:
@@ -646,7 +729,31 @@ def lfiltic(b, a, y, x=None):
 
 
 def deconvolve(signal, divisor):
-    """Deconvolves divisor out of signal.
+    """Deconvolves `divisor` out of `signal`.
+
+    Parameters
+    ----------
+    signal : array
+        Signal input
+    divisor : array
+        Divisor input
+
+    Returns
+    -------
+    q : array
+        Quotient of the division
+    r : array
+        Remainder
+
+    Examples
+    --------
+    >>> from scipy import signal
+    >>> sig = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1,])
+    >>> filter = np.array([1,1,0])
+    >>> res = signal.convolve(sig, filter)
+    >>> signal.deconvolve(res, filter)
+    (array([ 0.,  0.,  0.,  0.,  0.,  1.,  1.,  1.,  1.]),
+     array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.]))
 
     """
     num = atleast_1d(signal)
@@ -666,14 +773,14 @@ def deconvolve(signal, divisor):
 
 def hilbert(x, N=None, axis=-1):
     """
-    Compute the analytic signal.
+    Compute the analytic signal, using the Hilbert transform.
 
     The transformation is done along the last axis by default.
 
     Parameters
     ----------
     x : array_like
-        Signal data
+        Signal data.  Must be real.
     N : int, optional
         Number of Fourier components.  Default: ``x.shape[axis]``
     axis : int, optional
@@ -686,14 +793,17 @@ def hilbert(x, N=None, axis=-1):
 
     Notes
     -----
-    The analytic signal `x_a(t)` of `x(t)` is::
+    The analytic signal ``x_a(t)`` of signal ``x(t)`` is:
 
-        x_a = F^{-1}(F(x) 2U) = x + i y
+    .. math:: x_a = F^{-1}(F(x) 2U) = x + i y
 
-    where ``F`` is the Fourier transform, ``U`` the unit step function,
-    and ``y`` the Hilbert transform of ``x``. [1]_
+    where `F` is the Fourier transform, `U` the unit step function,
+    and `y` the Hilbert transform of `x`. [1]_
 
-    `axis` argument is new in scipy 0.8.0.
+    In other words, the negative half of the frequency spectrum is zeroed
+    out, turning the real-valued signal into a complex signal.  The Hilbert
+    transformed signal can be obtained from ``np.imag(hilbert(x))``, and the
+    original signal from ``np.real(hilbert(x))``.
 
     References
     ----------
@@ -712,11 +822,11 @@ def hilbert(x, N=None, axis=-1):
     Xf = fft(x, N, axis=axis)
     h = zeros(N)
     if N % 2 == 0:
-        h[0] = h[N / 2] = 1
-        h[1:N / 2] = 2
+        h[0] = h[N // 2] = 1
+        h[1:N // 2] = 2
     else:
         h[0] = 1
-        h[1:(N + 1) / 2] = 2
+        h[1:(N + 1) // 2] = 2
 
     if len(x.shape) > 1:
         ind = [newaxis] * x.ndim
@@ -770,11 +880,11 @@ def hilbert2(x, N=None):
         h = eval("h%d" % (p + 1))
         N1 = N[p]
         if N1 % 2 == 0:
-            h[0] = h[N1 / 2] = 1
-            h[1:N1 / 2] = 2
+            h[0] = h[N1 // 2] = 1
+            h[1:N1 // 2] = 2
         else:
             h[0] = 1
-            h[1:(N1 + 1) / 2] = 2
+            h[1:(N1 + 1) // 2] = 2
         exec("h%d = h" % (p + 1), globals(), locals())
 
     h = h1[:, newaxis] * h2[newaxis, :]
@@ -829,8 +939,9 @@ def unique_roots(p, tol=1e-3, rtype='min'):
 
     Examples
     --------
+    >>> from scipy import signal
     >>> vals = [0, 1.3, 1.31, 2.8, 1.25, 2.2, 10.3]
-    >>> uniq, mult = sp.signal.unique_roots(vals, tol=2e-2, rtype='avg')
+    >>> uniq, mult = signal.unique_roots(vals, tol=2e-2, rtype='avg')
 
     Check which roots have multiplicity larger than 1:
 
@@ -839,11 +950,14 @@ def unique_roots(p, tol=1e-3, rtype='min'):
 
     """
     if rtype in ['max', 'maximum']:
-        comproot = np.maximum
+        comproot = np.max
     elif rtype in ['min', 'minimum']:
-        comproot = np.minimum
+        comproot = np.min
     elif rtype in ['avg', 'mean']:
         comproot = np.mean
+    else:
+        raise ValueError("`rtype` must be one of "
+                         "{'max', 'maximum', 'min', 'minimum', 'avg', 'mean'}")
     p = asarray(p) * 1.0
     tol = abs(tol)
     p, indx = cmplx_sort(p)
@@ -869,7 +983,8 @@ def unique_roots(p, tol=1e-3, rtype='min'):
 
 
 def invres(r, p, k, tol=1e-3, rtype='avg'):
-    """Compute b(s) and a(s) from partial fraction expansion: r,p,k
+    """
+    Compute b(s) and a(s) from partial fraction expansion: r,p,k
 
     If ``M = len(b)`` and ``N = len(a)``::
 
@@ -888,9 +1003,29 @@ def invres(r, p, k, tol=1e-3, rtype='avg'):
         -------- + ----------- + ... + -----------
         (s-p[i])  (s-p[i])**2          (s-p[i])**n
 
+    Parameters
+    ----------
+    r : ndarray
+        Residues.
+    p : ndarray
+        Poles.
+    k : ndarray
+        Coefficients of the direct polynomial term.
+    tol : float, optional
+        The tolerance for two roots to be considered equal. Default is 1e-3.
+    rtype : {'max', 'min, 'avg'}, optional
+        How to determine the returned root if multiple roots are within
+        `tol` of each other.
+
+          'max': pick the maximum of those roots.
+
+          'min': pick the minimum of those roots.
+
+          'avg': take the average of those roots.
+
     See Also
     --------
-    residue, poly, polyval, unique_roots
+    residue, unique_roots
 
     """
     extra = k
@@ -995,7 +1130,8 @@ def residue(b, a, tol=1e-3, rtype='avg'):
 
 
 def residuez(b, a, tol=1e-3, rtype='avg'):
-    """Compute partial-fraction expansion of b(z) / a(z).
+    """
+    Compute partial-fraction expansion of b(z) / a(z).
 
     If ``M = len(b)`` and ``N = len(a)``::
 
@@ -1016,7 +1152,7 @@ def residuez(b, a, tol=1e-3, rtype='avg'):
 
     See also
     --------
-    invresz, poly, polyval, unique_roots
+    invresz, unique_roots
 
     """
     b, a = map(asarray, (b, a))
@@ -1065,7 +1201,8 @@ def residuez(b, a, tol=1e-3, rtype='avg'):
 
 
 def invresz(r, p, k, tol=1e-3, rtype='avg'):
-    """Compute b(z) and a(z) from partial fraction expansion: r,p,k
+    """
+    Compute b(z) and a(z) from partial fraction expansion: r,p,k
 
     If ``M = len(b)`` and ``N = len(a)``::
 
@@ -1084,9 +1221,9 @@ def invresz(r, p, k, tol=1e-3, rtype='avg'):
         -------------- + ------------------ + ... + ------------------
         (1-p[i]z**(-1))  (1-p[i]z**(-1))**2         (1-p[i]z**(-1))**n
 
-    See also
+    See Also
     --------
-    residuez, poly, polyval, unique_roots
+    residuez, unique_roots
 
     """
     extra = asarray(k)
@@ -1195,9 +1332,9 @@ def resample(x, num, t=None, axis=0, window=None):
     newshape[axis] = num
     N = int(np.minimum(num, Nx))
     Y = zeros(newshape, 'D')
-    sl[axis] = slice(0, (N + 1) / 2)
+    sl[axis] = slice(0, (N + 1) // 2)
     Y[sl] = X[sl]
-    sl[axis] = slice(-(N - 1) / 2, None)
+    sl[axis] = slice(-(N - 1) // 2, None)
     Y[sl] = X[sl]
     y = ifft(Y, axis=axis) * (float(num) / float(Nx))
 
@@ -1239,11 +1376,12 @@ def detrend(data, axis=-1, type='linear', bp=0):
 
     Examples
     --------
+    >>> from scipy import signal
     >>> randgen = np.random.RandomState(9)
     >>> npoints = 1e3
     >>> noise = randgen.randn(npoints)
     >>> x = 3 + 2*np.linspace(0, 1, npoints) + noise
-    >>> (sp.signal.detrend(x) - noise).max() < 0.01
+    >>> (signal.detrend(x) - noise).max() < 0.01
     True
 
     """
@@ -1271,7 +1409,7 @@ def detrend(data, axis=-1, type='linear', bp=0):
             axis = axis + rnk
         newdims = r_[axis, 0:axis, axis + 1:rnk]
         newdata = reshape(transpose(data, tuple(newdims)),
-                          (N, prod(dshape, axis=0) / N))
+                          (N, prod(dshape, axis=0) // N))
         newdata = newdata.copy()  # make sure we have a copy
         if newdata.dtype.char not in 'dfDF':
             newdata = newdata.astype(dtype)
@@ -1286,7 +1424,7 @@ def detrend(data, axis=-1, type='linear', bp=0):
         # Put data back in original shape.
         tdshape = take(dshape, newdims, 0)
         ret = reshape(newdata, tuple(tdshape))
-        vals = range(1, rnk)
+        vals = list(range(1, rnk))
         olddims = vals[:axis] + [0] + vals[axis:]
         ret = transpose(ret, tuple(olddims))
         return ret
@@ -1304,7 +1442,7 @@ def lfilter_zi(b, a):
     Parameters
     ----------
     b, a : array_like (1-D)
-        The IIR filter coefficients. See `scipy.signal.lfilter` for more
+        The IIR filter coefficients. See `lfilter` for more
         information.
 
     Returns
@@ -1423,7 +1561,8 @@ def lfilter_zi(b, a):
 
 
 def filtfilt(b, a, x, axis=-1, padtype='odd', padlen=None):
-    """A forward-backward filter.
+    """
+    A forward-backward filter.
 
     This function applies a linear filter twice, once forward
     and once backwards.  The combined filter has linear phase.
@@ -1433,14 +1572,14 @@ def filtfilt(b, a, x, axis=-1, padtype='odd', padlen=None):
     and even extensions have the corresponding symmetry about the end point
     of the data.  The constant extension extends the data with the values
     at end points.  On both the forward and backwards passes, the
-    initial condition of the filter is found by using lfilter_zi and
+    initial condition of the filter is found by using `lfilter_zi` and
     scaling it by the end point of the extended data.
 
     Parameters
     ----------
-    b : array_like, 1-D
+    b : (N,) array_like
         The numerator coefficient vector of the filter.
-    a : array_like, 1-D
+    a : (N,) array_like
         The denominator coefficient vector of the filter.  If a[0]
         is not 1, then both a and b are normalized by a[0].
     x : array_like
@@ -1467,8 +1606,7 @@ def filtfilt(b, a, x, axis=-1, padtype='odd', padlen=None):
 
     See Also
     --------
-    lfilter_zi
-    lfilter
+    lfilter_zi, lfilter
 
     Examples
     --------
@@ -1484,9 +1622,9 @@ def filtfilt(b, a, x, axis=-1, padtype='odd', padlen=None):
     the Nyquist rate, or 125 Hz, and apply it to x with filtfilt.  The
     result should be approximately xlow, with no phase shift.
 
-    >>> from scipy.signal import butter
-    >>> b, a = butter(8, 0.125)
-    >>> y = filtfilt(b, a, x, padlen=150)
+    >>> from scipy import signal
+    >>> b, a = signal.butter(8, 0.125)
+    >>> y = signal.filtfilt(b, a, x, padlen=150)
     >>> np.abs(y - xlow).max()
     9.1086182074789912e-06
 
@@ -1495,6 +1633,7 @@ def filtfilt(b, a, x, axis=-1, padtype='odd', padlen=None):
     the filter's transients have dissipated by the time the actual data
     is reached.  In general, transient effects at the edges are
     unavoidable.
+
     """
 
     if padtype not in ['even', 'odd', 'constant', None]:
@@ -1568,32 +1707,34 @@ from scipy.signal.fir_filter_design import firwin
 
 
 def decimate(x, q, n=None, ftype='iir', axis=-1):
-    """Downsample the signal x by an integer factor q, using an order n filter.
+    """
+    Downsample the signal by using a filter.
 
-    By default an order 8 Chebyshev type I filter is used.  A 30 point FIR
-    filter with hamming window is used if ftype is 'fir'.
+    By default, an order 8 Chebyshev type I filter is used.  A 30 point FIR
+    filter with hamming window is used if `ftype` is 'fir'.
 
     Parameters
     ----------
-    x : N-d array
-      the signal to be downsampled
+    x : ndarray
+        The signal to be downsampled, as an N-dimensional array.
     q : int
-      the downsampling factor
-    n : int or None
-      the order of the filter (1 less than the length for 'fir')
-    ftype : {'iir' or 'fir'}
-      the type of the lowpass filter
-    axis : int
-      the axis along which to decimate
+        The downsampling factor.
+    n : int, optional
+        The order of the filter (1 less than the length for 'fir').
+    ftype : str {'iir', 'fir'}, optional
+        The type of the lowpass filter.
+    axis : int, optional
+        The axis along which to decimate.
 
     Returns
     -------
-    y : N-d array
-      the down-sampled signal
+    y : ndarray
+        The down-sampled signal.
 
     See also
     --------
     resample
+
     """
 
     if not isinstance(q, int):

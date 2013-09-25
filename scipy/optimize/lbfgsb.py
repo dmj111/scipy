@@ -13,31 +13,33 @@ Functions
 
 ## Copyright (c) 2004 David M. Cooke <cookedm@physics.mcmaster.ca>
 
-## Permission is hereby granted, free of charge, to any person obtaining a copy of
-## this software and associated documentation files (the "Software"), to deal in
-## the Software without restriction, including without limitation the rights to
-## use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-## of the Software, and to permit persons to whom the Software is furnished to do
-## so, subject to the following conditions:
+## Permission is hereby granted, free of charge, to any person obtaining a
+## copy of this software and associated documentation files (the "Software"),
+## to deal in the Software without restriction, including without limitation
+## the rights to use, copy, modify, merge, publish, distribute, sublicense,
+## and/or sell copies of the Software, and to permit persons to whom the
+## Software is furnished to do so, subject to the following conditions:
 
-## The above copyright notice and this permission notice shall be included in all
-## copies or substantial portions of the Software.
+## The above copyright notice and this permission notice shall be included in
+## all copies or substantial portions of the Software.
 
 ## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 ## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 ## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 ## AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-## OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-## SOFTWARE.
+## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+## FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+## DEALINGS IN THE SOFTWARE.
 
-## Modifications by Travis Oliphant and Enthought, Inc.  for inclusion in SciPy
+## Modifications by Travis Oliphant and Enthought, Inc. for inclusion in SciPy
+
+from __future__ import division, print_function, absolute_import
 
 import numpy as np
 from numpy import array, asarray, float64, int32, zeros
-import _lbfgsb
-from optimize import approx_fprime, MemoizeJac, Result, _check_unknown_options
-from numpy.compat import asbytes
+from . import _lbfgsb
+from .optimize import (approx_fprime, MemoizeJac, Result,
+                       _check_unknown_options, wrap_function)
 
 __all__ = ['fmin_l_bfgs_b']
 
@@ -46,7 +48,8 @@ def fmin_l_bfgs_b(func, x0, fprime=None, args=(),
                   approx_grad=0,
                   bounds=None, m=10, factr=1e7, pgtol=1e-5,
                   epsilon=1e-8,
-                  iprint=-1, maxfun=15000, disp=None):
+                  iprint=-1, maxfun=15000, maxiter=15000, disp=None,
+                  callback=None):
     """
     Minimize a function func using the L-BFGS-B algorithm.
 
@@ -98,6 +101,11 @@ def fmin_l_bfgs_b(func, x0, fprime=None, args=(),
         `iprint` (i.e., `iprint` gets the value of `disp`).
     maxfun : int
         Maximum number of function evaluations.
+    maxiter : int
+        Maximum number of iterations.
+    callback : callable, optional
+        Called after each iteration, as ``callback(xk)``, where ``xk`` is the
+        current parameter vector.
 
     Returns
     -------
@@ -111,11 +119,12 @@ def fmin_l_bfgs_b(func, x0, fprime=None, args=(),
         * d['warnflag'] is
 
           - 0 if converged,
-          - 1 if too many function evaluations,
+          - 1 if too many function evaluations or too many iterations,
           - 2 if stopped for another reason, given in d['task']
 
         * d['grad'] is the gradient at the minimum (should be 0 ish)
         * d['funcalls'] is the number of function calls made.
+        * d['nit'] is the number of iterations.
 
     See also
     --------
@@ -124,11 +133,12 @@ def fmin_l_bfgs_b(func, x0, fprime=None, args=(),
 
     Notes
     -----
-    License of L-BFGS-B (Fortran code):
+    License of L-BFGS-B (FORTRAN code):
 
-    The version included here (in fortran code) is 3.0 (released April 25, 2011).
-    It was written by Ciyou Zhu, Richard Byrd, and Jorge Nocedal
-    <nocedal@ece.nwu.edu>. It carries the following condition for use:
+    The version included here (in fortran code) is 3.0
+    (released April 25, 2011).  It was written by Ciyou Zhu, Richard Byrd,
+    and Jorge Nocedal <nocedal@ece.nwu.edu>. It carries the following
+    condition for use:
 
     This software is freely available, but we expect that all publications
     describing work using this software, or all commercial products using it,
@@ -162,29 +172,33 @@ def fmin_l_bfgs_b(func, x0, fprime=None, args=(),
     # build options
     if disp is None:
         disp = iprint
-    opts = {'disp'  : disp,
+    opts = {'disp': disp,
             'iprint': iprint,
             'maxcor': m,
-            'ftol'  : factr * np.finfo(float).eps,
-            'gtol'  : pgtol,
-            'eps'   : epsilon,
-            'maxiter': maxfun}
+            'ftol': factr * np.finfo(float).eps,
+            'gtol': pgtol,
+            'eps': epsilon,
+            'maxfun': maxfun,
+            'maxiter': maxiter,
+            'callback': callback}
 
     res = _minimize_lbfgsb(fun, x0, args=args, jac=jac, bounds=bounds,
                            **opts)
     d = {'grad': res['jac'],
          'task': res['message'],
          'funcalls': res['nfev'],
+         'nit': res['nit'],
          'warnflag': res['status']}
     f = res['fun']
     x = res['x']
 
     return x, f, d
 
+
 def _minimize_lbfgsb(fun, x0, args=(), jac=None, bounds=None,
                      disp=None, maxcor=10, ftol=2.2204460492503131e-09,
-                     gtol=1e-5, eps=1e-8, maxiter=15000, iprint=-1,
-                     **unknown_options):
+                     gtol=1e-5, eps=1e-8, maxfun=15000, maxiter=15000,
+                     iprint=-1, callback=None, **unknown_options):
     """
     Minimize a scalar function of one or more variables using the L-BFGS-B
     algorithm.
@@ -212,8 +226,10 @@ def _minimize_lbfgsb(fun, x0, args=(), jac=None, bounds=None,
             Step size used for numerical approximation of the jacobian.
         disp : int
             Set to True to print convergence messages.
-        maxiter : int
+        maxfun : int
             Maximum number of function evaluations.
+        maxiter : int
+            Maximum number of iterations.
 
     This function is called by the `minimize` function with
     `method=L-BFGS-B`. It is not supposed to be called directly.
@@ -221,7 +237,6 @@ def _minimize_lbfgsb(fun, x0, args=(), jac=None, bounds=None,
     _check_unknown_options(unknown_options)
     m = maxcor
     epsilon = eps
-    maxfun = maxiter
     pgtol = gtol
     factr = ftol / np.finfo(float).eps
 
@@ -229,7 +244,7 @@ def _minimize_lbfgsb(fun, x0, args=(), jac=None, bounds=None,
     n, = x0.shape
 
     if bounds is None:
-        bounds = [(None,None)] * n
+        bounds = [(None, None)] * n
     if len(bounds) != n:
         raise ValueError('length of x0 != length of bounds')
 
@@ -239,6 +254,7 @@ def _minimize_lbfgsb(fun, x0, args=(), jac=None, bounds=None,
         else:
             iprint = disp
 
+    n_function_evals, fun = wrap_function(fun, ())
     if jac is None:
         def func_and_grad(x):
             f = fun(x, *args)
@@ -254,11 +270,11 @@ def _minimize_lbfgsb(fun, x0, args=(), jac=None, bounds=None,
     low_bnd = zeros(n, float64)
     upper_bnd = zeros(n, float64)
     bounds_map = {(None, None): 0,
-              (1, None) : 1,
-              (1, 1) : 2,
-              (None, 1) : 3}
+                  (1, None): 1,
+                  (1, 1): 2,
+                  (None, 1): 3}
     for i in range(0, n):
-        l,u = bounds[i]
+        l, u = bounds[i]
         if l is not None:
             low_bnd[i] = l
             l = 1
@@ -273,71 +289,76 @@ def _minimize_lbfgsb(fun, x0, args=(), jac=None, bounds=None,
     wa = zeros(2*m*n + 5*n + 11*m*m + 8*m, float64)
     iwa = zeros(3*n, int32)
     task = zeros(1, 'S60')
-    csave = zeros(1,'S60')
+    csave = zeros(1, 'S60')
     lsave = zeros(4, int32)
     isave = zeros(44, int32)
     dsave = zeros(29, float64)
 
     task[:] = 'START'
 
-    n_function_evals = 0
+    n_iterations = 0
+
     while 1:
 #        x, f, g, wa, iwa, task, csave, lsave, isave, dsave = \
         _lbfgsb.setulb(m, x, low_bnd, upper_bnd, nbd, f, g, factr,
                        pgtol, wa, iwa, task, iprint, csave, lsave,
                        isave, dsave)
         task_str = task.tostring()
-        if task_str.startswith(asbytes('FG')):
-            # minimization routine wants f and g at the current x
-            n_function_evals += 1
-            # Overwrite f and g:
-            f, g = func_and_grad(x)
-        elif task_str.startswith(asbytes('NEW_X')):
+        if task_str.startswith(b'FG'):
+            if n_function_evals[0] > maxfun:
+                task[:] = ('STOP: TOTAL NO. of f AND g EVALUATIONS '
+                           'EXCEEDS LIMIT')
+            else:
+                # minimization routine wants f and g at the current x
+                # Overwrite f and g:
+                f, g = func_and_grad(x)
+        elif task_str.startswith(b'NEW_X'):
             # new iteration
-            if n_function_evals > maxfun:
-                task[:] = 'STOP: TOTAL NO. of f AND g EVALUATIONS EXCEEDS LIMIT'
+            if n_iterations > maxiter:
+                task[:] = 'STOP: TOTAL NO. of ITERATIONS EXCEEDS LIMIT'
+            else:
+                n_iterations += 1
+                if callback is not None:
+                    callback(x)
         else:
             break
 
-    task_str = task.tostring().strip(asbytes('\x00')).strip()
-    if task_str.startswith(asbytes('CONV')):
+    task_str = task.tostring().strip(b'\x00').strip()
+    if task_str.startswith(b'CONV'):
         warnflag = 0
-    elif n_function_evals > maxfun:
+    elif n_function_evals[0] > maxfun:
+        warnflag = 1
+    elif n_iterations > maxiter:
         warnflag = 1
     else:
         warnflag = 2
 
-
-    d = {'grad' : g,
-         'task' : task_str,
-         'funcalls' : n_function_evals,
-         'warnflag' : warnflag
-        }
-
-    return Result(fun=f, jac=g, nfev=n_function_evals, status=warnflag,
-                  message=task_str, x=x, success=(warnflag==0))
+    return Result(fun=f, jac=g, nfev=n_function_evals[0], nit=n_iterations,
+                  status=warnflag, message=task_str, x=x,
+                  success=(warnflag == 0))
 
 
 if __name__ == '__main__':
     def func(x):
-        f = 0.25*(x[0]-1)**2
+        f = 0.25 * (x[0] - 1) ** 2
         for i in range(1, x.shape[0]):
-            f += (x[i] - x[i-1]**2)**2
+            f += (x[i] - x[i-1] ** 2) ** 2
         f *= 4
         return f
+
     def grad(x):
         g = zeros(x.shape, float64)
-        t1 = x[1] - x[0]**2
-        g[0] = 2*(x[0]-1) - 16*x[0]*t1
-        for i in range(1, g.shape[0]-1):
+        t1 = x[1] - x[0] ** 2
+        g[0] = 2 * (x[0] - 1) - 16 * x[0] * t1
+        for i in range(1, g.shape[0] - 1):
             t2 = t1
-            t1 = x[i+1] - x[i]**2
-            g[i] = 8*t2 - 16*x[i]*t1
-        g[-1] = 8*t1
+            t1 = x[i + 1] - x[i] ** 2
+            g[i] = 8 * t2 - 16*x[i] * t1
+        g[-1] = 8 * t1
         return g
+
     def func_and_grad(x):
         return func(x), grad(x)
-
 
     class Problem(object):
         def fun(self, x):
@@ -346,10 +367,10 @@ if __name__ == '__main__':
     factr = 1e7
     pgtol = 1e-5
 
-    n=25
-    m=10
+    n = 25
+    m = 10
 
-    bounds = [(None,None)] * n
+    bounds = [(None, None)] * n
     for i in range(0, n, 2):
         bounds[i] = (1.0, 100)
     for i in range(1, n, 2):
@@ -360,22 +381,22 @@ if __name__ == '__main__':
 
     x, f, d = fmin_l_bfgs_b(func, x0, fprime=grad, m=m,
                             factr=factr, pgtol=pgtol)
-    print x
-    print f
-    print d
+    print(x)
+    print(f)
+    print(d)
     x, f, d = fmin_l_bfgs_b(func, x0, approx_grad=1,
                             m=m, factr=factr, pgtol=pgtol)
-    print x
-    print f
-    print d
+    print(x)
+    print(f)
+    print(d)
     x, f, d = fmin_l_bfgs_b(func_and_grad, x0, approx_grad=0,
                             m=m, factr=factr, pgtol=pgtol)
-    print x
-    print f
-    print d
+    print(x)
+    print(f)
+    print(d)
     p = Problem()
     x, f, d = fmin_l_bfgs_b(p.fun, x0, approx_grad=0,
                             m=m, factr=factr, pgtol=pgtol)
-    print x
-    print f
-    print d
+    print(x)
+    print(f)
+    print(d)

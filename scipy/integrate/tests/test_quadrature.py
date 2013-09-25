@@ -1,7 +1,9 @@
+from __future__ import division, print_function, absolute_import
+
 import numpy as np
 from numpy import cos, sin, pi
 from numpy.testing import TestCase, run_module_suite, assert_equal, \
-    assert_almost_equal, assert_allclose
+    assert_almost_equal, assert_allclose, assert_
 
 from scipy.integrate import quadrature, romberg, romb, newton_cotes, cumtrapz
 
@@ -22,6 +24,23 @@ class TestQuadrature(TestCase):
         def myfunc(x,n,z):       # Bessel function integrand
             return 1e90 * cos(n*x-z*sin(x))/pi
         val, err = quadrature(myfunc,0,pi,(2,1.8),rtol=1e-10)
+        table_val = 1e90 * 0.30614353532540296487
+        assert_allclose(val, table_val, rtol=1e-10)
+
+    def test_quadrature_miniter(self):
+        # Typical function with two extra arguments:
+        def myfunc(x,n,z):       # Bessel function integrand
+            return cos(n*x-z*sin(x))/pi
+        table_val = 0.30614353532540296487
+        for miniter in [5, 52]:
+            val, err = quadrature(myfunc,0,pi,(2,1.8),miniter=miniter)
+            assert_almost_equal(val, table_val, decimal=7)
+            assert_(err < 1.0)
+
+    def test_quadrature_single_args(self):
+        def myfunc(x,n):
+            return 1e90 * cos(n*x-1.8*sin(x))/pi
+        val, err = quadrature(myfunc,0,pi,args=2,rtol=1e-10)
         table_val = 1e90 * 0.30614353532540296487
         assert_allclose(val, table_val, rtol=1e-10)
 
@@ -106,12 +125,12 @@ class TestCumtrapz(TestCase):
         x = np.arange(3 * 2 * 4).reshape(3, 2, 4)
         y = x
         y_int = cumtrapz(y, x, initial=0)
-        y_expected = np.array([[[  0. ,   0.5,   2. ,   4.5],
-                                [  0. ,   4.5,  10. ,  16.5]],
-                               [[  0. ,   8.5,  18. ,  28.5],
-                                [  0. ,  12.5,  26. ,  40.5]],
-                               [[  0. ,  16.5,  34. ,  52.5],
-                                [  0. ,  20.5,  42. ,  64.5]]])
+        y_expected = np.array([[[0., 0.5, 2., 4.5],
+                                [0., 4.5, 10., 16.5]],
+                               [[0., 8.5, 18., 28.5],
+                                [0., 12.5, 26., 40.5]],
+                               [[0., 16.5, 34., 52.5],
+                                [0., 20.5, 42., 64.5]]])
 
         assert_allclose(y_int, y_expected)
 

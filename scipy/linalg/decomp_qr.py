@@ -1,14 +1,16 @@
 """QR decomposition functions."""
+from __future__ import division, print_function, absolute_import
 
 import numpy
 
 # Local imports
-from blas import get_blas_funcs
-from lapack import get_lapack_funcs, find_best_lapack_type
-from misc import _datacopied
+from .blas import get_blas_funcs
+from .lapack import get_lapack_funcs
+from .misc import _datacopied
 
 # XXX: what is qr_old, should it be kept?
 __all__ = ['qr', 'qr_multiply', 'rq', 'qr_old']
+
 
 def safecall(f, name, *args, **kwargs):
     """Call a LAPACK routine, determining lwork automatically and handling
@@ -24,7 +26,9 @@ def safecall(f, name, *args, **kwargs):
                          % (-ret[-1], name))
     return ret[:-2]
 
-def qr(a, overwrite_a=False, lwork=None, mode='full', pivoting=False):
+
+def qr(a, overwrite_a=False, lwork=None, mode='full', pivoting=False,
+       check_finite=True):
     """
     Compute QR decomposition of a matrix.
 
@@ -33,24 +37,28 @@ def qr(a, overwrite_a=False, lwork=None, mode='full', pivoting=False):
 
     Parameters
     ----------
-    a : array, shape (M, N)
+    a : (M, N) array_like
         Matrix to be decomposed
     overwrite_a : bool, optional
         Whether data in a is overwritten (may improve performance)
     lwork : int, optional
         Work array size, lwork >= a.shape[1]. If None or -1, an optimal size
         is computed.
-    mode : {'full', 'r', 'economic', 'raw'}
+    mode : {'full', 'r', 'economic', 'raw'}, optional
         Determines what information is to be returned: either both Q and R
         ('full', default), only R ('r') or both Q and R but computed in
         economy-size ('economic', see Notes). The final option 'raw'
-        (added in Scipy 0.11) makes the function return two matrixes
+        (added in Scipy 0.11) makes the function return two matrices
         (Q, TAU) in the internal format used by LAPACK.
     pivoting : bool, optional
         Whether or not factorization should include pivoting for rank-revealing
         qr decomposition. If pivoting, compute the decomposition
         ``A P = Q R`` as above, but where P is chosen such that the diagonal
         of R is non-increasing.
+    check_finite : boolean, optional
+        Whether to check that the input matrix contains only finite numbers.
+        Disabling may give a performance gain, but may result in problems
+        (crashes, non-termination) if the inputs do contain infinities or NaNs.
 
     Returns
     -------
@@ -59,7 +67,7 @@ def qr(a, overwrite_a=False, lwork=None, mode='full', pivoting=False):
         if ``mode='r'``.
     R : float or complex ndarray
         Of shape (M, N), or (K, N) for ``mode='economic'``.  ``K = min(M, N)``.
-    P : integer ndarray
+    P : int ndarray
         Of shape (N,) for ``pivoting=True``. Not returned if
         ``pivoting=False``.
 
@@ -116,7 +124,10 @@ def qr(a, overwrite_a=False, lwork=None, mode='full', pivoting=False):
         raise ValueError(
                  "Mode argument should be one of ['full', 'r', 'economic', 'raw']")
 
-    a1 = numpy.asarray_chkfinite(a)
+    if check_finite:
+        a1 = numpy.asarray_chkfinite(a)
+    else:
+        a1 = numpy.asarray(a)
     if len(a1.shape) != 2:
         raise ValueError("expected 2D array")
     M, N = a1.shape
@@ -125,7 +136,7 @@ def qr(a, overwrite_a=False, lwork=None, mode='full', pivoting=False):
     if pivoting:
         geqp3, = get_lapack_funcs(('geqp3',), (a1,))
         qr, jpvt, tau = safecall(geqp3, "geqp3", a1, overwrite_a=overwrite_a)
-        jpvt -= 1 # geqp3 returns a 1-based index array, so subtract 1
+        jpvt -= 1  # geqp3 returns a 1-based index array, so subtract 1
     else:
         geqrf, = get_lapack_funcs(('geqrf',), (a1,))
         qr, tau = safecall(geqrf, "geqrf", a1, lwork=lwork,
@@ -146,10 +157,7 @@ def qr(a, overwrite_a=False, lwork=None, mode='full', pivoting=False):
     elif mode == 'raw':
         return ((qr, tau),) + Rj
 
-    if find_best_lapack_type((a1,))[0] in ('s', 'd'):
-        gor_un_gqr, = get_lapack_funcs(('orgqr',), (qr,))
-    else:
-        gor_un_gqr, = get_lapack_funcs(('ungqr',), (qr,))
+    gor_un_gqr, = get_lapack_funcs(('orgqr',), (qr,))
 
     if M < N:
         Q, = safecall(gor_un_gqr, "gorgqr/gungqr", qr[:, :M], tau,
@@ -166,14 +174,16 @@ def qr(a, overwrite_a=False, lwork=None, mode='full', pivoting=False):
 
     return (Q,) + Rj
 
+
 def qr_multiply(a, c, mode='right', pivoting=False, conjugate=False,
     overwrite_a=False, overwrite_c=False):
-    """Calculate the QR decomposition and multiply Q with a matrix.
+    """
+    Calculate the QR decomposition and multiply Q with a matrix.
 
     Calculate the decomposition ``A = Q R`` where Q is unitary/orthogonal
     and R upper triangular. Multiply Q with a vector or a matrix c.
 
-    .. versionadded:: 0.11
+    .. versionadded:: 0.11.0
 
     Parameters
     ----------
@@ -181,7 +191,7 @@ def qr_multiply(a, c, mode='right', pivoting=False, conjugate=False,
         Matrix to be decomposed
     c : ndarray, one- or two-dimensional
         calculate the product of c and q, depending on the mode:
-    mode : {'left', 'right'}
+    mode : {'left', 'right'}, optional
         ``dot(Q, c)`` is returned if mode is 'left',
         ``dot(c, Q)`` is returned if mode is 'right'.
         The shape of c must be appropriate for the matrix multiplications,
@@ -195,7 +205,7 @@ def qr_multiply(a, c, mode='right', pivoting=False, conjugate=False,
         than explicit conjugation.
     overwrite_a : bool, optional
         Whether data in a is overwritten (may improve performance)
-    overwrite_c: bool, optional
+    overwrite_c : bool, optional
         Whether data in c is overwritten (may improve performance).
         If this is used, c must be big enough to keep the result,
         i.e. c.shape[0] = a.shape[0] if mode is 'left'.
@@ -208,7 +218,8 @@ def qr_multiply(a, c, mode='right', pivoting=False, conjugate=False,
     R : float or complex ndarray
         Of shape (K, N), ``K = min(M, N)``.
     P : ndarray of ints
-        Of shape (N,) for ``pivoting=True``. Not returned if ``pivoting=False``.
+        Of shape (N,) for ``pivoting=True``.
+        Not returned if ``pivoting=False``.
 
     Raises
     ------
@@ -230,7 +241,7 @@ def qr_multiply(a, c, mode='right', pivoting=False, conjugate=False,
         if mode == "left":
             c = c.T
 
-    a = numpy.asarray(a) # chkfinite done in qr
+    a = numpy.asarray(a)  # chkfinite done in qr
     M, N = a.shape
     if not (mode == "left" and
                 (not overwrite_c and min(M, N) == c.shape[0] or
@@ -241,11 +252,10 @@ def qr_multiply(a, c, mode='right', pivoting=False, conjugate=False,
     raw = qr(a, overwrite_a, None, "raw", pivoting)
     Q, tau = raw[0]
 
-    if find_best_lapack_type((Q,))[0] in ('s', 'd'):
-        gor_un_mqr, = get_lapack_funcs(('ormqr',), (Q,))
+    gor_un_mqr, = get_lapack_funcs(('ormqr',), (Q,))
+    if gor_un_mqr.typecode in ('s', 'd'):
         trans = "T"
     else:
-        gor_un_mqr, = get_lapack_funcs(('unmqr',), (Q,))
         trans = "C"
 
     Q = Q[:, :min(M, N)]
@@ -286,8 +296,9 @@ def qr_multiply(a, c, mode='right', pivoting=False, conjugate=False,
 
     return (cQ,) + raw[1:]
 
+
 @numpy.deprecate
-def qr_old(a, overwrite_a=False, lwork=None):
+def qr_old(a, overwrite_a=False, lwork=None, check_finite=True):
     """Compute QR decomposition of a matrix.
 
     Calculate the decomposition :lm:`A = Q R` where Q is unitary/orthogonal
@@ -302,6 +313,10 @@ def qr_old(a, overwrite_a=False, lwork=None):
     lwork : integer
         Work array size, lwork >= a.shape[1]. If None or -1, an optimal size
         is computed.
+    check_finite : boolean, optional
+        Whether to check that the input matrix contains only finite numbers.
+        Disabling may give a performance gain, but may result in problems
+        (crashes, non-termination) if the inputs do contain infinities or NaNs.
 
     Returns
     -------
@@ -312,7 +327,10 @@ def qr_old(a, overwrite_a=False, lwork=None):
     Raises LinAlgError if decomposition fails
 
     """
-    a1 = numpy.asarray_chkfinite(a)
+    if check_finite:
+        a1 = numpy.asarray_chkfinite(a)
+    else:
+        a1 = numpy.asarray(a)
     if len(a1.shape) != 2:
         raise ValueError('expected matrix')
     M,N = a1.shape
@@ -341,32 +359,42 @@ def qr_old(a, overwrite_a=False, lwork=None):
     return Q, R
 
 
-def rq(a, overwrite_a=False, lwork=None, mode='full'):
-    """Compute RQ decomposition of a square real matrix.
+def rq(a, overwrite_a=False, lwork=None, mode='full', check_finite=True):
+    """
+    Compute RQ decomposition of a square real matrix.
 
-    Calculate the decomposition :lm:`A = R Q` where Q is unitary/orthogonal
-    and R upper triangular.
+    Calculate the decomposition ``A = R Q`` where ``Q`` is
+    unitary/orthogonal and ``R`` upper triangular.
 
     Parameters
     ----------
     a : array, shape (M, M)
         Matrix to be decomposed
-    overwrite_a : boolean
+    overwrite_a : bool, optional
         Whether data in a is overwritten (may improve performance)
-    lwork : integer
+    lwork : int, optional
         Work array size, lwork >= a.shape[1]. If None or -1, an optimal size
         is computed.
-    mode : {'full', 'r', 'economic'}
+    mode : {'full', 'r', 'economic'}, optional
         Determines what information is to be returned: either both Q and R
         ('full', default), only R ('r') or both Q and R but computed in
         economy-size ('economic', see Notes).
+    check_finite : bool, optional
+        Whether to check that the input matrix contains only finite numbers.
+        Disabling may give a performance gain, but may result in problems
+        (crashes, non-termination) if the inputs do contain infinities or NaNs.
 
     Returns
     -------
     R : float array, shape (M, N)
+        Upper triangular
     Q : float or complex array, shape (M, M)
+        Unitary/orthogonal
 
-    Raises LinAlgError if decomposition fails
+    Raises
+    ------
+    LinAlgError
+        If decomposition fails.
 
     Examples
     --------
@@ -387,10 +415,13 @@ def rq(a, overwrite_a=False, lwork=None, mode='full'):
 
     """
     if not mode in ['full', 'r', 'economic']:
-        raise ValueError(\
+        raise ValueError(
                  "Mode argument should be one of ['full', 'r', 'economic']")
 
-    a1 = numpy.asarray_chkfinite(a)
+    if check_finite:
+        a1 = numpy.asarray_chkfinite(a)
+    else:
+        a1 = numpy.asarray(a)
     if len(a1.shape) != 2:
         raise ValueError('expected matrix')
     M, N = a1.shape
@@ -413,10 +444,7 @@ def rq(a, overwrite_a=False, lwork=None, mode='full'):
     if mode == 'r':
         return R
 
-    if find_best_lapack_type((a1,))[0] in ('s', 'd'):
-        gor_un_grq, = get_lapack_funcs(('orgrq',), (rq,))
-    else:
-        gor_un_grq, = get_lapack_funcs(('ungrq',), (rq,))
+    gor_un_grq, = get_lapack_funcs(('orgrq',), (rq,))
 
     if N < M:
         # get optimal work array

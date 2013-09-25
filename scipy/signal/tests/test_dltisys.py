@@ -1,6 +1,7 @@
-
 # Author: Jeffrey Armstrong <jeff@approximatrix.com>
 # April 4, 2011
+
+from __future__ import division, print_function, absolute_import
 
 import numpy as np
 from numpy.testing import TestCase, run_module_suite, assert_equal, \
@@ -198,8 +199,8 @@ class TestDLTI(TestCase):
     def test_dlsim_simple2d(self):
         lambda1 = 0.5
         lambda2 = 0.25
-        a = np.array([[lambda1,     0.0],
-                      [0.0,     lambda2]])
+        a = np.array([[lambda1, 0.0],
+                      [0.0, lambda2]])
         b = np.array([[0.0],
                       [0.0]])
         c = np.array([[1.0, 0.0],
@@ -252,6 +253,15 @@ class TestDLTI(TestCase):
 
         assert_allclose(yi[0][:, 0], y0)
         assert_allclose(yi[1][:, 0], y1)
+
+        # Check that dt=0.1, n=3 gives 3 time values.
+        system = ([1.0], [1.0, -0.5], 0.1)
+        t, (y,) = dstep(system, n=3)
+        assert_allclose(t, [0, 0.1, 0.2])
+        assert_array_equal(y.T, [[0, 1.0, 1.5]])
+        t, (y,) = dimpulse(system, n=3)
+        assert_allclose(t, [0, 0.1, 0.2])
+        assert_array_equal(y.T, [[0, 1, 0.5]])
 
 
 if __name__ == "__main__":

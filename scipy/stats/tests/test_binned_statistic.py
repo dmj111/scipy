@@ -1,7 +1,10 @@
+from __future__ import division, print_function, absolute_import
+
 import numpy as np
-from numpy.testing import assert_array_almost_equal
+from numpy.testing import assert_array_almost_equal, run_module_suite
 from scipy.stats import \
     binned_statistic, binned_statistic_2d, binned_statistic_dd
+
 
 class TestBinnedStatistic(object):
 
@@ -23,7 +26,6 @@ class TestBinnedStatistic(object):
         assert_array_almost_equal(count1, count2)
         assert_array_almost_equal(edges1, edges2)
 
-
     def test_1d_sum(self):
         x = self.x
         v = self.v
@@ -33,7 +35,6 @@ class TestBinnedStatistic(object):
 
         assert_array_almost_equal(sum1, sum2)
         assert_array_almost_equal(edges1, edges2)
-
 
     def test_1d_mean(self):
         x = self.x
@@ -45,7 +46,6 @@ class TestBinnedStatistic(object):
         assert_array_almost_equal(stat1, stat2)
         assert_array_almost_equal(edges1, edges2)
 
-
     def test_1d_std(self):
         x = self.x
         v = self.v
@@ -55,7 +55,6 @@ class TestBinnedStatistic(object):
 
         assert_array_almost_equal(stat1, stat2)
         assert_array_almost_equal(edges1, edges2)
-
 
     def test_1d_median(self):
         x = self.x
@@ -75,11 +74,10 @@ class TestBinnedStatistic(object):
         bc2 = np.array([3, 2, 1, 3, 2, 3, 3, 3, 3, 1, 1, 3, 3, 1, 2, 3, 1,
                         1, 2, 1])
 
-        bcount = [(bc==i).sum() for i in np.unique(bc)]
+        bcount = [(bc == i).sum() for i in np.unique(bc)]
 
         assert_array_almost_equal(bc, bc2)
         assert_array_almost_equal(bcount, count1)
-
 
     def test_2d_count(self):
         x = self.x
@@ -93,7 +91,6 @@ class TestBinnedStatistic(object):
         assert_array_almost_equal(binx1, binx2)
         assert_array_almost_equal(biny1, biny2)
 
-
     def test_2d_sum(self):
         x = self.x
         y = self.y
@@ -105,7 +102,6 @@ class TestBinnedStatistic(object):
         assert_array_almost_equal(sum1, sum2)
         assert_array_almost_equal(binx1, binx2)
         assert_array_almost_equal(biny1, biny2)
-
 
     def test_2d_mean(self):
         x = self.x
@@ -119,7 +115,6 @@ class TestBinnedStatistic(object):
         assert_array_almost_equal(binx1, binx2)
         assert_array_almost_equal(biny1, biny2)
 
-
     def test_2d_std(self):
         x = self.x
         y = self.y
@@ -131,7 +126,6 @@ class TestBinnedStatistic(object):
         assert_array_almost_equal(stat1, stat2)
         assert_array_almost_equal(binx1, binx2)
         assert_array_almost_equal(biny1, biny2)
-
 
     def test_2d_median(self):
         x = self.x
@@ -151,15 +145,14 @@ class TestBinnedStatistic(object):
         v = self.v[:20]
 
         count1, binx1, biny1, bc = binned_statistic_2d(x, y, v, 'count', bins=3)
-        bc2 = np.array([17, 11,  6, 16, 11, 17, 18, 17, 17,  7,  6, 18, 16,
-                        6, 11, 16,  6,  6, 11,  8])
+        bc2 = np.array([17, 11, 6, 16, 11, 17, 18, 17, 17, 7, 6, 18, 16,
+                        6, 11, 16, 6, 6, 11, 8])
 
-        bcount = [(bc==i).sum() for i in np.unique(bc)]
+        bcount = [(bc == i).sum() for i in np.unique(bc)]
 
         assert_array_almost_equal(bc, bc2)
         count1adj = count1[count1.nonzero()]
         assert_array_almost_equal(bcount, count1adj)
-
 
     def test_dd_count(self):
         X = self.X
@@ -171,7 +164,6 @@ class TestBinnedStatistic(object):
         assert_array_almost_equal(count1, count2)
         assert_array_almost_equal(edges1, edges2)
 
-
     def test_dd_sum(self):
         X = self.X
         v = self.v
@@ -181,7 +173,6 @@ class TestBinnedStatistic(object):
 
         assert_array_almost_equal(sum1, sum2)
         assert_array_almost_equal(edges1, edges2)
-
 
     def test_dd_mean(self):
         X = self.X
@@ -193,7 +184,6 @@ class TestBinnedStatistic(object):
         assert_array_almost_equal(stat1, stat2)
         assert_array_almost_equal(edges1, edges2)
 
-
     def test_dd_std(self):
         X = self.X
         v = self.v
@@ -203,7 +193,6 @@ class TestBinnedStatistic(object):
 
         assert_array_almost_equal(stat1, stat2)
         assert_array_almost_equal(edges1, edges2)
-
 
     def test_dd_median(self):
         X = self.X
@@ -215,7 +204,6 @@ class TestBinnedStatistic(object):
         assert_array_almost_equal(stat1, stat2)
         assert_array_almost_equal(edges1, edges2)
 
-
     def test_dd_bincode(self):
         X = self.X[:20]
         v = self.v[:20]
@@ -224,8 +212,12 @@ class TestBinnedStatistic(object):
         bc2 = np.array([63, 33, 86, 83, 88, 67, 57, 33, 42, 41, 82, 83, 92,
                         32, 36, 91, 43, 87, 81, 81])
 
-        bcount = [(bc==i).sum() for i in np.unique(bc)]
+        bcount = [(bc == i).sum() for i in np.unique(bc)]
 
         assert_array_almost_equal(bc, bc2)
         count1adj = count1[count1.nonzero()]
         assert_array_almost_equal(bcount, count1adj)
+
+
+if __name__ == "__main__":
+    run_module_suite()

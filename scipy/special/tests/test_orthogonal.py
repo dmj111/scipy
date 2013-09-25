@@ -1,9 +1,12 @@
+from __future__ import division, print_function, absolute_import
+
 from numpy.testing import assert_array_almost_equal, assert_almost_equal, \
         rand, TestCase
+from scipy.lib.six import xrange
 import numpy as np
 from numpy import array, sqrt
 import scipy.special.orthogonal as orth
-from scipy.special import gamma
+from scipy.special import gamma, eval_hermite
 
 
 class TestCheby(TestCase):
@@ -68,11 +71,13 @@ class TestCheby(TestCase):
         assert_array_almost_equal(U4.c,[16,0,-12,0,1],13)
         assert_array_almost_equal(U5.c,[32,0,-32,0,6,0],13)
 
+
 class TestGegenbauer(TestCase):
 
     def test_gegenbauer(self):
         a = 5*rand()-0.5
-        if np.any(a==0): a = -0.2
+        if np.any(a == 0):
+            a = -0.2
         Ca0 = orth.gegenbauer(0,a)
         Ca1 = orth.gegenbauer(1,a)
         Ca2 = orth.gegenbauer(2,a)
@@ -89,6 +94,7 @@ class TestGegenbauer(TestCase):
                                                0,3*a*(a+1)])/6.0,11)
         assert_array_almost_equal(Ca5.c,array([4*orth.poch(a,5),0,-20*orth.poch(a,4),
                                                0,15*orth.poch(a,3),0])/15.0,11)
+
 
 class TestHermite(TestCase):
     def test_hermite(self):
@@ -128,6 +134,23 @@ class TestHermite(TestCase):
         assert_array_almost_equal(H4.c,he4.c,13)
         assert_array_almost_equal(H5.c,he5.c,13)
 
+    def test_h_roots(self):
+        # this test is copied from numpy's TestGauss in test_hermite.py
+        x, w = orth.h_roots(100)
+
+        n = np.arange(100)
+        v = eval_hermite(n[:, np.newaxis], x[np.newaxis,:])
+        vv = np.dot(v*w, v.T)
+        vd = 1 / np.sqrt(vv.diagonal())
+        vv = vd[:, np.newaxis] * vv * vd
+        assert_almost_equal(vv, np.eye(100))
+
+        # check that the integral of 1 is correct
+        assert_almost_equal(w.sum(), np.sqrt(np.pi))
+
+
+
+
 class _test_sh_legendre(TestCase):
 
     def test_sh_legendre(self):
@@ -151,6 +174,7 @@ class _test_sh_legendre(TestCase):
         assert_array_almost_equal(Ps3.c,pse3.c,13)
         assert_array_almost_equal(Ps4.c,pse4.c,12)
         assert_array_almost_equal(Ps5.c,pse5.c,12)
+
 
 class _test_sh_chebyt(TestCase):
 
@@ -176,6 +200,7 @@ class _test_sh_chebyt(TestCase):
         assert_array_almost_equal(Ts4.c,tse4.c,12)
         assert_array_almost_equal(Ts5.c,tse5.c,12)
 
+
 class _test_sh_chebyu(TestCase):
 
     def test_sh_chebyu(self):
@@ -199,6 +224,7 @@ class _test_sh_chebyu(TestCase):
         assert_array_almost_equal(Us3.c,use3.c,13)
         assert_array_almost_equal(Us4.c,use4.c,12)
         assert_array_almost_equal(Us5.c,use5.c,11)
+
 
 class _test_sh_jacobi(TestCase):
     def test_sh_jacobi(self):
@@ -227,6 +253,7 @@ class _test_sh_jacobi(TestCase):
         assert_array_almost_equal(G3.c,ge3.c,13)
         assert_array_almost_equal(G4.c,ge4.c,13)
         assert_array_almost_equal(G5.c,ge5.c,13)
+
 
 class TestCall(object):
     def test_call(self):

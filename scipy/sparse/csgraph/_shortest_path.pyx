@@ -35,10 +35,13 @@ def shortest_path(csgraph, method='auto',
                   unweighted=False,
                   overwrite=False):
     """
-    shortest_path(csgraph, method='auto', directed=True, return_predecessors=False, unweighted=False, overwrite=False)
+    shortest_path(csgraph, method='auto', directed=True, return_predecessors=False,
+                  unweighted=False, overwrite=False)
 
     Perform a shortest-path graph search on a positive directed or
     undirected graph.
+
+    .. versionadded:: 0.11.0
 
     Parameters
     ----------
@@ -49,20 +52,24 @@ def shortest_path(csgraph, method='auto',
         
            'auto' -- (default) select the best among 'FW', 'D', 'BF', or 'J' 
                      based on the input data.
+
            'FW'   -- Floyd-Warshall algorithm.  Computational cost is
                      approximately ``O[N^3]``.  The input csgraph will be
                      converted to a dense representation.
+
            'D'    -- Dijkstra's algorithm with Fibonacci heaps.  Computational
                      cost is approximately ``O[N(N*k + N*log(N))]``, where
 		     ``k`` is the average number of connected edges per node.
 		     The input csgraph will be converted to a csr
 		     representation.
+
            'BF'   -- Bellman-Ford algorithm.  This algorithm can be used when
                      weights are negative.  If a negative cycle is encountered,
                      an error will be raised.  Computational cost is
                      approximately ``O[N(N^2 k)]``, where ``k`` is the average
                      number of connected edges per node. The input csgraph will
                      be converted to a csr representation.
+
            'J'    -- Johnson's algorithm.  Like the Bellman-Ford algorithm,
                      Johnson's algorithm is designed for use when the weights
                      are negative.  It combines the Bellman-Ford algorithm
@@ -161,9 +168,12 @@ def floyd_warshall(csgraph, directed=True,
                    unweighted=False,
                    overwrite=False):
     """
-    floyd_warshall(csgraph, directed=True, return_predecessors=False, unweighted=False, overwrite=False)
+    floyd_warshall(csgraph, directed=True, return_predecessors=False,
+                   unweighted=False, overwrite=False)
 
     Compute the shortest path lengths using the Floyd-Warshall algorithm
+
+    .. versionadded:: 0.11.0
 
     Parameters
     ----------
@@ -312,9 +322,12 @@ def dijkstra(csgraph, directed=True, indices=None,
              return_predecessors=False,
              unweighted=False):
     """
-    dijkstra(csgraph, directed=True, indices=None, return_predecessors=False, unweighted=False)
+    dijkstra(csgraph, directed=True, indices=None, return_predecessors=False,
+             unweighted=False)
 
     Dijkstra algorithm using Fibonacci Heaps
+
+    .. versionadded:: 0.11.0
 
     Parameters
     ----------
@@ -581,6 +594,8 @@ def bellman_ford(csgraph, directed=True, indices=None,
     weights.  If a negative cycle is detected, an error is raised.  For
     graphs without negative edge weights, dijkstra's algorithm may be faster.
 
+    .. versionadded:: 0.11.0
+
     Parameters
     ----------
     csgraph : array, matrix, or sparse matrix, 2 dimensions
@@ -792,6 +807,8 @@ def johnson(csgraph, directed=True, indices=None,
     the presence of negative cycles.  If a negative cycle is detected,
     an error is raised.  For graphs without negative edge weights,
     dijkstra() may be faster.
+
+    .. versionadded:: 0.11.0
 
     Parameters
     ----------

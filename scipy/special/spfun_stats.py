@@ -33,10 +33,13 @@
 """Some more special functions which may be useful for multivariate statistical
 analysis."""
 
+from __future__ import division, print_function, absolute_import
+
 import numpy as np
 from scipy.special import gammaln as loggam
 
-__all__ = ['multigammln']
+
+__all__ = ['multigammaln']
 
 
 def multigammaln(a, d):
@@ -46,14 +49,14 @@ def multigammaln(a, d):
     Parameters
     ----------
     a : ndarray
-        the multivariate gamma is computed for each item of a
+        The multivariate gamma is computed for each item of `a`.
     d : int
-        the dimension of the space of integration.
+        The dimension of the space of integration.
 
     Returns
     -------
     res : ndarray
-        the values of the log multivariate gamma at the given points a.
+        The values of the log multivariate gamma at the given points `a`.
 
     Notes
     -----
@@ -62,10 +65,10 @@ def multigammaln(a, d):
 
         \Gamma_d(a) = \int_{A>0}{e^{-tr(A)\cdot{|A|}^{a - (m+1)/2}dA}}
 
-    with the condition a > (d-1)/2, and A>0 being the set of all the positive
-    definite matrices of dimension s. Note that a is a scalar: the integrand
-    only is multivariate, the argument is not (the function is defined over a
-    subset of the real set).
+    with the condition ``a > (d-1)/2``, and ``A > 0`` being the set of all the
+    positive definite matrices of dimension s.  Note that a is a scalar: the
+    integrand only is multivariate, the argument is not (the function is
+    defined over a subset of the real set).
 
     This can be proven to be equal to the much friendlier equation::
 
@@ -81,13 +84,9 @@ def multigammaln(a, d):
     if not np.isscalar(d) or (np.floor(d) != d):
         raise ValueError("d should be a positive integer (dimension)")
     if np.any(a <= 0.5 * (d - 1)):
-        raise ValueError("condition a (%f) > 0.5 * (d-1) (%f) not met" \
+        raise ValueError("condition a (%f) > 0.5 * (d-1) (%f) not met"
                          % (a, 0.5 * (d-1)))
 
     res = (d * (d-1) * 0.25) * np.log(np.pi)
-    if a.size == 1:
-        axis = -1
-    else:
-        axis = 0
-    res += np.sum(loggam([(a - (j - 1.)/2) for j in range(1, d+1)]), axis)
+    res += np.sum(loggam([(a - (j - 1.)/2) for j in range(1, d+1)]), axis=0)
     return res

@@ -2,6 +2,8 @@
 Wrappers to LAPACK library
 ==========================
 
+NOTE: this module is deprecated -- use scipy.linalg.lapack instead!
+
   flapack -- wrappers for Fortran [*] LAPACK routines
   clapack -- wrappers for ATLAS LAPACK routines
   calc_lwork -- calculate optimal lwork parameters
@@ -134,19 +136,31 @@ Optimal lwork is maxwrk. Default is minwrk.
 
 """
 
+from __future__ import division, print_function, absolute_import
 
 __all__ = ['get_lapack_funcs','calc_lwork','flapack','clapack']
 
+from numpy import deprecate
 
-import calc_lwork
+from . import calc_lwork
 
 # The following ensures that possibly missing flavor (C or Fortran) is
 # replaced with the available one. If none is available, exception
 # is raised at the first attempt to use the resources.
 
-import flapack
-import clapack
 
+@deprecate(old_name="scipy.lib.lapack", new_name="scipy.linalg.lapack")
+def _deprecated():
+    pass
+try:
+    _deprecated()
+except DeprecationWarning as e:
+    # don't fail import if DeprecationWarnings raise error -- works around
+    # the situation with Numpy's test framework
+    pass
+
+from . import flapack
+from . import clapack
 
 _use_force_clapack = 1
 if hasattr(clapack,'empty_module'):
@@ -156,10 +170,11 @@ elif hasattr(flapack,'empty_module'):
     flapack = clapack
 
 
-_type_conv = {'f':'s', 'd':'d', 'F':'c', 'D':'z'} # 'd' will be default for 'i',..
+_type_conv = {'f':'s', 'd':'d', 'F':'c', 'D':'z'}  # 'd' will be default for 'i',..
 _inv_type_conv = {'s':'f','d':'d','c':'F','z':'D'}
 
 
+@deprecate
 def get_lapack_funcs(names,arrays=(),debug=0,force_clapack=1):
     """Return available LAPACK function objects with names.
     arrays are used to determine the optimal prefix of
@@ -168,7 +183,7 @@ def get_lapack_funcs(names,arrays=(),debug=0,force_clapack=1):
     is returned for column major storaged arrays with
     rowmajor argument set to False.
     """
-    force_clapack=0  #XXX: Don't set it true! The feature is unreliable
+    force_clapack = 0  # XXX: Don't set it true! The feature is unreliable
                      #     and may cause incorrect results.
                      #     See test_basic.test_solve.check_20Feb04_bug.
 
@@ -208,7 +223,7 @@ def get_lapack_funcs(names,arrays=(),debug=0,force_clapack=1):
                 func2 = getattr(m2,func_name,None)
                 if func2 is not None:
                     import new
-                    exec _colmajor_func_template % {'func_name':func_name}
+                    exec(_colmajor_func_template % {'func_name':func_name})
                     func = new.function(func_code,{'clapack_func':func2},func_name)
                     func.module_name = m2_name
                     func.__doc__ = func2.__doc__

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import division, print_function, absolute_import
 
 import os
 import sys
@@ -7,28 +8,10 @@ from distutils.dep_util import newer_group, newer
 from glob import glob
 from os.path import join
 
-
-def needs_veclib_wrapper(info):
-    """Returns true if needs special veclib wrapper."""
-    import re
-    r_accel = re.compile("Accelerate")
-    r_vec = re.compile("vecLib")
-    res = False
-    try:
-        tmpstr = info['extra_link_args']
-        for i in tmpstr:
-            if r_accel.search(i) or r_vec.search(i):
-                res = True
-    except KeyError:
-        pass
-
-    return res
-
-
 def configuration(parent_package='',top_path=None):
     from numpy.distutils.system_info import get_info, NotFoundError
-
     from numpy.distutils.misc_util import Configuration
+    from scipy._build_utils import get_g77_abi_wrappers
 
     config = Configuration('isolve',parent_package,top_path)
 
@@ -49,21 +32,14 @@ def configuration(parent_package='',top_path=None):
 #               'SORREVCOM.f.src'
                ]
 
-    if needs_veclib_wrapper(lapack_opt):
-        methods += [join('FWRAPPERS', 'veclib_cabi_f.f'),
-                    join('FWRAPPERS', 'veclib_cabi_c.c')]
-    else:
-        methods += [join('FWRAPPERS', 'dummy.f')]
-
-
     Util = ['STOPTEST2.f.src','getbreak.f.src']
     sources = Util + methods + ['_iterative.pyf.src']
+    sources = [join('iterative', x) for x in sources]
+    sources += get_g77_abi_wrappers(lapack_opt)
+
     config.add_extension('_iterative',
-                         sources=[join('iterative', x) for x in sources],
-                         extra_info=lapack_opt,
-                         depends=[join('iterative', 'FWRAPPERS', x) for x in
-                         ['veclib_cabi_f.f', 'veclib_cabi_c.c', 'dummy.f']]
-                         )
+                         sources=sources,
+                         extra_info=lapack_opt)
 
     config.add_data_dir('tests')
 

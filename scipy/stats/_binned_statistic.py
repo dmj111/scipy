@@ -1,4 +1,7 @@
+from __future__ import division, print_function, absolute_import
+
 import numpy as np
+from scipy.lib.six import callable
 
 
 def binned_statistic(x, values, statistic='mean',
@@ -11,13 +14,15 @@ def binned_statistic(x, values, statistic='mean',
     each bin.  This function allows the computation of the sum, mean, median,
     or other statistic of the values within each bin.
 
+    .. versionadded:: 0.11.0
+
     Parameters
     ----------
     x : array_like
         A sequence of values to be binned.
     values : array_like
         The values on which the statistic will be computed.  This must be
-        the same shape as x.
+        the same shape as `x`.
     statistic : string or callable, optional
         The statistic to compute (default is 'mean').
         The following statistics are available:
@@ -45,9 +50,6 @@ def binned_statistic(x, values, statistic='mean',
         The lower and upper range of the bins.  If not provided, range
         is simply ``(x.min(), x.max())``.  Values outside the range are
         ignored.
-    binnumber : ndarray, 1d, int
-        This assigns to each observation an integer that represents the bin
-        in which this observation falls. Array has the same length as values.
 
     Returns
     -------
@@ -55,6 +57,13 @@ def binned_statistic(x, values, statistic='mean',
         The values of the selected statistic in each bin.
     bin_edges : array of dtype float
         Return the bin edges ``(length(statistic)+1)``.
+    binnumber : 1-D ndarray of ints
+        This assigns to each observation an integer that represents the bin
+        in which this observation falls. Array has the same length as values.
+
+    See Also
+    --------
+    numpy.histogram, binned_statistic_2d, binned_statistic_dd
 
     Notes
     -----
@@ -76,9 +85,6 @@ def binned_statistic(x, values, statistic='mean',
     >>> stats.binned_statistic([1, 2, 1, 2, 4], np.arange(5), statistic='mean', bins=3)
     (array([ 1.,  2.,  4.]), array([ 1.,  2.,  3.,  4.]), array([1, 2, 1, 2, 3]))
 
-    See Also
-    --------
-    np.histogram, binned_statistic_2d, binned_statistic_dd
     """
     try:
         N = len(bins)
@@ -104,15 +110,17 @@ def binned_statistic_2d(x, y, values, statistic='mean',
     each bin.  This function allows the computation of the sum, mean, median,
     or other statistic of the values within each bin.
 
+    .. versionadded:: 0.11.0
+
     Parameters
     ----------
-    x : array_like
+    x : (N,) array_like
         A sequence of values to be binned along the first dimension.
-    y : array_like
+    y : (M,) array_like
         A sequence of values to be binned along the second dimension.
-    values : array_like
+    values : (N,) array_like
         The values on which the statistic will be computed.  This must be
-        the same shape as x.
+        the same shape as `x`.
     statistic : string or callable, optional
         The statistic to compute (default is 'mean').
         The following statistics are available:
@@ -136,10 +144,10 @@ def binned_statistic_2d(x, y, values, statistic='mean',
 
           * the number of bins for the two dimensions (nx=ny=bins),
           * the number of bins in each dimension (nx, ny = bins),
-          * the bin edges for the two dimensions (x_edges=y_edges=bins),
+          * the bin edges for the two dimensions (x_edges = y_edges = bins),
           * the bin edges in each dimension (x_edges, y_edges = bins).
 
-    range : array_like, shape(2,2), optional
+    range : (2,2) array_like, optional
         The leftmost and rightmost edges of the bins along each dimension
         (if not specified explicitly in the `bins` parameters):
         [[xmin, xmax], [ymin, ymax]]. All values outside of this range will be
@@ -147,19 +155,20 @@ def binned_statistic_2d(x, y, values, statistic='mean',
 
     Returns
     -------
-    statistic : ndarray, shape(nx, ny)
+    statistic : (nx, ny) ndarray
         The values of the selected statistic in each two-dimensional bin
-    xedges : ndarray, shape(nx + 1,)
+    xedges : (nx + 1) ndarray
         The bin edges along the first dimension.
-    yedges : ndarray, shape(ny + 1,)
+    yedges : (ny + 1) ndarray
         The bin edges along the second dimension.
-    binnumber : ndarray, 1d, int
+    binnumber : 1-D ndarray of ints
         This assigns to each observation an integer that represents the bin
-        in which this observation falls. Array has the same length as values.
+        in which this observation falls. Array has the same length as `values`.
 
     See Also
     --------
-    np.histogram2d, binned_statistic, binned_statistic_dd
+    numpy.histogram2d, binned_statistic, binned_statistic_dd
+
     """
 
     # This code is based on np.histogram2d
@@ -187,6 +196,8 @@ def binned_statistic_dd(sample, values, statistic='mean',
     the space into bins, and returns the count of the number of points in
     each bin.  This function allows the computation of the sum, mean, median,
     or other statistic of the values within each bin.
+
+    .. versionadded:: 0.11.0
 
     Parameters
     ----------
@@ -233,7 +244,7 @@ def binned_statistic_dd(sample, values, statistic='mean',
     edges : list of ndarrays
         A list of D arrays describing the (nxi + 1) bin edges for each
         dimension
-    binnumber : ndarray, 1d, int
+    binnumber : 1-D ndarray of ints
         This assigns to each observation an integer that represents the bin
         in which this observation falls. Array has the same length as values.
 

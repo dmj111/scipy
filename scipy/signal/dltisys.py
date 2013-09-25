@@ -4,10 +4,11 @@ dltisys - Code related to discrete linear time-invariant systems
 
 # Author: Jeffrey Armstrong <jeff@approximatrix.com>
 # April 4, 2011
+from __future__ import division, print_function, absolute_import
 
 import numpy as np
 from scipy.interpolate import interp1d
-from ltisys import tf2ss, zpk2ss
+from .ltisys import tf2ss, zpk2ss
 
 __all__ = ['dlsim', 'dstep', 'dimpulse']
 
@@ -57,7 +58,7 @@ def dlsim(system, u, t=None, x0=None):
     A simple integrator transfer function with a discrete time step of 1.0
     could be implemented as:
 
-    >>> from import signal
+    >>> from scipy import signal
     >>> tf = ([1.0,], [1.0, -1.0], 1.0)
     >>> t_in = [0.0, 1.0, 2.0, 3.0]
     >>> u = np.asarray([0.0, 0.0, 1.0, 1.0])
@@ -147,7 +148,7 @@ def dimpulse(system, x0=None, t=None, n=None):
     t : ndarray
         A 1-D array of time points.
     yout : tuple of array_like
-        Step response of system.  Each element of the tuple represents
+        Impulse response of system.  Each element of the tuple represents
         the output of the system based on an impulse in each input.
 
     See Also
@@ -177,7 +178,7 @@ def dimpulse(system, x0=None, t=None, n=None):
     # If time is not specified, use the number of samples
     # and system dt
     if t is None:
-        t = np.arange(0, n * dt, dt)
+        t = np.linspace(0, n * dt, n, endpoint=False)
 
     # For each input, implement a step change
     yout = None
@@ -252,7 +253,7 @@ def dstep(system, x0=None, t=None, n=None):
     # If time is not specified, use the number of samples
     # and system dt
     if t is None:
-        t = np.arange(0, n * dt, dt)
+        t = np.linspace(0, n * dt, n, endpoint=False)
 
     # For each input, implement a step change
     yout = None
@@ -270,4 +271,3 @@ def dstep(system, x0=None, t=None, n=None):
         tout = one_output[0]
 
     return tout, yout
-

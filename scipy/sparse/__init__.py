@@ -5,7 +5,7 @@ Sparse matrices (:mod:`scipy.sparse`)
 
 .. currentmodule:: scipy.sparse
 
-SciPy 2-D sparse matrix package.
+SciPy 2-D sparse matrix package for numeric data.
 
 Contents
 ========
@@ -93,8 +93,8 @@ There are seven available sparse matrix types:
     6. coo_matrix: COOrdinate format (aka IJV, triplet format)
     7. dia_matrix: DIAgonal format
 
-To construct a matrix efficiently, use either lil_matrix (recommended) or
-dok_matrix. The lil_matrix class supports basic slicing and fancy
+To construct a matrix efficiently, use either dok_matrix or lil_matrix.
+The lil_matrix class supports basic slicing and fancy
 indexing with a similar syntax to NumPy arrays.  As illustrated below,
 the COO format may also be used to efficiently construct matrices.
 
@@ -105,6 +105,30 @@ is less so.
 
 All conversions among the CSR, CSC, and COO formats are efficient,
 linear-time operations.
+
+Matrix vector product
+---------------------
+To do a vector product between a sparse matrix and a vector simply use
+the matrix `dot` method, as described in its docstring:
+
+>>> import numpy as np
+>>> from scipy.sparse import csr_matrix
+>>> A = csr_matrix([[1, 2, 0], [0, 0, 3], [4, 0, 5]])
+>>> v = np.array([1, 0, -1])
+>>> A.dot(v)
+array([ 1, -3, -1], dtype=int64)
+
+.. warning:: As of NumPy 1.7, `np.dot` is not aware of sparse matrices,
+  therefore using it will result on unexpected results or errors.
+  The corresponding dense matrix should be obtained first instead:
+
+  >>> np.dot(A.todense(), v)
+  matrix([[ 1, -3, -1]], dtype=int64)
+
+  but then all the performance advantages would be lost.
+  Notice that it returned a matrix, because `todense` returns a matrix.
+
+The CSR format is specially suitable for fast matrix vector products.
 
 Example 1
 ---------
@@ -172,27 +196,29 @@ sorted indices are required (e.g. when passing data to other libraries).
 
 """
 
+from __future__ import division, print_function, absolute_import
+
 # Original code by Travis Oliphant.
 # Modified and extended by Ed Schofield, Robert Cimrman,
 # Nathan Bell, and Jake Vanderplas.
 
-from base import *
-from csr import *
-from csc import *
-from lil import *
-from dok import *
-from coo import *
-from dia import *
-from bsr import *
-from construct import *
-from extract import *
+from .base import *
+from .csr import *
+from .csc import *
+from .lil import *
+from .dok import *
+from .coo import *
+from .dia import *
+from .bsr import *
+from .construct import *
+from .extract import *
 
 # for backward compatibility with v0.10.  This function is marked as deprecated
-from csgraph import cs_graph_components
+from .csgraph import cs_graph_components
 
 #from spfuncs import *
 
-__all__ = filter(lambda s:not s.startswith('_'),dir())
+__all__ = [s for s in dir() if not s.startswith('_')]
 from numpy.testing import Tester
 test = Tester().test
 bench = Tester().bench

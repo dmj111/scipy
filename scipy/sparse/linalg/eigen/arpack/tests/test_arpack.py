@@ -1,3 +1,5 @@
+from __future__ import division, print_function, absolute_import
+
 __usage__ = """
 To run tests locally:
   python tests/test_arpack.py [-l<int>] [-v<int>]
@@ -19,15 +21,17 @@ from scipy.sparse.linalg import LinearOperator, aslinearoperator
 from scipy.sparse.linalg.eigen.arpack import eigs, eigsh, svds, \
      ArpackNoConvergence
 
-from scipy.linalg import svd
+from scipy.linalg import svd, hilbert
 
 
 # eigs() and eigsh() are called many times, so apply a filter for the warnings
 # they generate here.
 _eigs_warn_msg = "Single-precision types in `eigs` and `eighs`"
 
+
 def setup_module():
     warnings.filterwarnings("ignore", message=_eigs_warn_msg)
+
 
 def teardown_module():
     warnings.filterwarnings("default", message=_eigs_warn_msg)
@@ -35,6 +39,7 @@ def teardown_module():
 
 # precision for tests
 _ndigits = {'f': 3, 'd': 11, 'F': 3, 'D': 11}
+
 
 def _get_test_tolerance(type_char, mattype=None):
     """
@@ -77,6 +82,7 @@ def _get_test_tolerance(type_char, mattype=None):
 
     return tol, rtol, atol
 
+
 def generate_matrix(N, complex=False, hermitian=False,
                     pos_definite=False, sparse=False):
     M = np.random.random((N,N))
@@ -94,16 +100,16 @@ def generate_matrix(N, complex=False, hermitian=False,
         else:
             M = np.dot(M.conj(), M.T)
             if sparse:
-                i = np.random.randint(N, size=N * N / 4)
-                j = np.random.randint(N, size=N * N / 4)
+                i = np.random.randint(N, size=N * N // 4)
+                j = np.random.randint(N, size=N * N // 4)
                 ind = np.where(i == j)
                 j[ind] = (j[ind] + 1) % N
                 M[i,j] = 0
                 M[j,i] = 0
     else:
         if sparse:
-            i = np.random.randint(N, size=N * N / 2)
-            j = np.random.randint(N, size=N * N / 2)
+            i = np.random.randint(N, size=N * N // 2)
+            j = np.random.randint(N, size=N * N // 2)
             M[i,j] = 0
     return M
 
@@ -131,7 +137,7 @@ def argsort_which(eval, typ, k, which,
     if sigma is None:
         reval = np.round(eval, decimals=_ndigits[typ])
     else:
-        if mode is None or mode=='normal':
+        if mode is None or mode == 'normal':
             if OPpart is None:
                 reval = 1. / (eval - sigma)
             elif OPpart == 'r':
@@ -140,9 +146,9 @@ def argsort_which(eval, typ, k, which,
             elif OPpart == 'i':
                 reval = -0.5j * (1. / (eval - sigma)
                                  - 1. / (eval - np.conj(sigma)))
-        elif mode=='cayley':
+        elif mode == 'cayley':
             reval = (eval + sigma) / (eval - sigma)
-        elif mode=='buckling':
+        elif mode == 'buckling':
             reval = eval / (eval - sigma)
         else:
             raise ValueError("mode='%s' not recognized" % mode)
@@ -167,7 +173,7 @@ def argsort_which(eval, typ, k, which,
     elif which in ['SM', 'SA', 'SR', 'SI']:
         return ind[:k]
     elif which == 'BE':
-        return np.concatenate((ind[:k/2], ind[k/2-k:]))
+        return np.concatenate((ind[:k//2], ind[k//2-k:]))
 
 
 def eval_evec(symmetric, d, typ, k, which, v0=None, sigma=None,
@@ -216,53 +222,71 @@ def eval_evec(symmetric, d, typ, k, which, v0=None, sigma=None,
     # compute suitable tolerances
     kwargs['tol'], rtol, atol = _get_test_tolerance(typ, mattype)
 
-    # solve
-    if general:
-        try:
-            eval, evec = eigs_func(ac, k, bc, **kwargs)
-        except ArpackNoConvergence:
-            kwargs['maxiter'] = 20*a.shape[0]
-            eval, evec = eigs_func(ac, k, bc, **kwargs)
-    else:
-        try:
-            eval, evec = eigs_func(ac, k, **kwargs)
-        except ArpackNoConvergence:
-            kwargs['maxiter'] = 20*a.shape[0]
-            eval, evec = eigs_func(ac, k, **kwargs)
+    # on rare occasions, ARPACK routines return results that are proper
+    # eigenvalues and -vectors, but not necessarily the ones requested in
+    # the parameter which. This is inherent to the Krylov methods, and
+    # should not be treated as a failure. If such a rare situation
+    # occurs, the calculation is tried again (but at most a few times).
+    ntries = 0
+    while ntries < 5:
+        # solve
+        if general:
+            try:
+                eval, evec = eigs_func(ac, k, bc, **kwargs)
+            except ArpackNoConvergence:
+                kwargs['maxiter'] = 20*a.shape[0]
+                eval, evec = eigs_func(ac, k, bc, **kwargs)
+        else:
+            try:
+                eval, evec = eigs_func(ac, k, **kwargs)
+            except ArpackNoConvergence:
+                kwargs['maxiter'] = 20*a.shape[0]
+                eval, evec = eigs_func(ac, k, **kwargs)
 
-    ind = argsort_which(eval, typ, k, which,
-                        sigma, OPpart, mode)
-    eval_a = eval
-    eval = eval[ind]
-    evec = evec[:,ind]
+        ind = argsort_which(eval, typ, k, which,
+                            sigma, OPpart, mode)
+        eval_a = eval
+        eval = eval[ind]
+        evec = evec[:,ind]
+
+        # check eigenvectors
+        LHS = np.dot(a, evec)
+        if general:
+            RHS = eval * np.dot(b, evec)
+        else:
+            RHS = eval * evec
+
+            assert_allclose(LHS, RHS, rtol=rtol, atol=atol, err_msg=err)
+
+        try:
+            # check eigenvalues
+            assert_allclose_cc(eval, exact_eval, rtol=rtol, atol=atol,
+                               err_msg=err)
+            break
+        except AssertionError:
+            ntries += 1
 
     # check eigenvalues
     assert_allclose_cc(eval, exact_eval, rtol=rtol, atol=atol, err_msg=err)
 
-    # check eigenvectors
-    LHS = np.dot(a, evec)
-    if general:
-        RHS = eval * np.dot(b, evec)
-    else:
-        RHS = eval * evec
-
-    assert_allclose(LHS, RHS, rtol=rtol, atol=atol, err_msg=err)
 
 class DictWithRepr(dict):
     def __init__(self, name):
         self.name = name
+
     def __repr__(self):
         return "<%s>" % self.name
+
 
 class SymmetricParams:
     def __init__(self):
         self.eigs = eigsh
         self.which = ['LM', 'SM', 'LA', 'SA', 'BE']
         self.mattypes = [csr_matrix, aslinearoperator, np.asarray]
-        self.sigmas_modes = {None : ['normal'],
-                             0.5 : ['normal', 'buckling', 'cayley']}
+        self.sigmas_modes = {None: ['normal'],
+                             0.5: ['normal', 'buckling', 'cayley']}
 
-        #generate matrices
+        # generate matrices
         # these should all be float32 so that the eigenvalues
         # are the same in float32 and float64
         N = 6
@@ -304,16 +328,17 @@ class SymmetricParams:
         self.real_test_cases = [SS, GS]
         self.complex_test_cases = [SH, GH]
 
+
 class NonSymmetricParams:
     def __init__(self):
         self.eigs = eigs
-        self.which = ['LM', 'LR', 'LI']#, 'SM', 'LR', 'SR', 'LI', 'SI']
+        self.which = ['LM', 'LR', 'LI']  # , 'SM', 'LR', 'SR', 'LI', 'SI']
         self.mattypes = [csr_matrix, aslinearoperator, np.asarray]
-        self.sigmas_OPparts = {None : [None],
-                               0.1 : ['r'],
-                               0.1 + 0.1j : ['r', 'i']}
+        self.sigmas_OPparts = {None: [None],
+                               0.1: ['r'],
+                               0.1 + 0.1j: ['r', 'i']}
 
-        #generate matrices
+        # generate matrices
         # these should all be float32 so that the eigenvalues
         # are the same in float32 and float64
         N = 6
@@ -362,9 +387,9 @@ def test_symmetric_modes():
         for typ in 'fd':
             for which in params.which:
                 for mattype in params.mattypes:
-                    for (sigma, modes) in params.sigmas_modes.iteritems():
+                    for (sigma, modes) in params.sigmas_modes.items():
                         for mode in modes:
-                            yield  (eval_evec, symmetric, D, typ, k, which,
+                            yield (eval_evec, symmetric, D, typ, k, which,
                                     None, sigma, mattype, None, mode)
 
 
@@ -375,10 +400,11 @@ def test_hermitian_modes():
     for D in params.complex_test_cases:
         for typ in 'FD':
             for which in params.which:
-                if which == 'BE': continue  # BE invalid for complex
+                if which == 'BE':
+                    continue  # BE invalid for complex
                 for mattype in params.mattypes:
                     for sigma in params.sigmas_modes:
-                        yield  (eval_evec, symmetric, D, typ, k, which,
+                        yield (eval_evec, symmetric, D, typ, k, which,
                                 None, sigma, mattype)
 
 
@@ -399,7 +425,7 @@ def test_symmetric_no_convergence():
     try:
         w, v = eigsh(m, 4, which='LM', v0=m[:, 0], maxiter=5, tol=tol)
         raise AssertionError("Spurious no-error exit")
-    except ArpackNoConvergence, err:
+    except ArpackNoConvergence as err:
         k = len(err.eigenvalues)
         if k <= 0:
             raise AssertionError("Spurious no-eigenvalues-found case")
@@ -415,7 +441,7 @@ def test_real_nonsymmetric_modes():
         for typ in 'fd':
             for which in params.which:
                 for mattype in params.mattypes:
-                    for sigma, OPparts in params.sigmas_OPparts.iteritems():
+                    for sigma, OPparts in params.sigmas_OPparts.items():
                         for OPpart in OPparts:
                             yield (eval_evec, symmetric, D, typ, k, which,
                                    None, sigma, mattype, OPpart)
@@ -467,7 +493,7 @@ def test_standard_nonsymmetric_no_convergence():
     try:
         w, v = eigs(m, 4, which='LM', v0=m[:, 0], maxiter=5, tol=tol)
         raise AssertionError("Spurious no-error exit")
-    except ArpackNoConvergence, err:
+    except ArpackNoConvergence as err:
         k = len(err.eigenvalues)
         if k <= 0:
             raise AssertionError("Spurious no-eigenvalues-found case")
@@ -486,6 +512,7 @@ def test_eigen_bad_kwargs():
     # Test eigen on wrong keyword argument
     A = csc_matrix(np.zeros((2, 2)))
     assert_raises(ValueError, eigs, A, which='XX')
+
 
 def test_ticket_1459_arpack_crash():
     for dtype in [np.float32, np.float64]:
@@ -509,13 +536,18 @@ def test_ticket_1459_arpack_crash():
 #----------------------------------------------------------------------
 # sparse SVD tests
 
-def sorted_svd(m, k):
-    #Compute svd of a dense matrix m, and return singular vectors/values
-    #sorted.
+def sorted_svd(m, k, which='LM'):
+    # Compute svd of a dense matrix m, and return singular vectors/values
+    # sorted.
     if isspmatrix(m):
         m = m.todense()
     u, s, vh = svd(m)
-    ii = np.argsort(s)[-k:]
+    if which == 'LM':
+        ii = np.argsort(s)[-k:]
+    elif which == 'SM':
+        ii = np.argsort(s)[:k]
+    else:
+        raise ValueError("unknown which=%r" % (which,))
 
     return u[:, ii], s[ii], vh[ii]
 
@@ -566,6 +598,45 @@ def test_svd_simple_complex():
             sm_hat = svd_estimate(su, ss, svh)
 
             assert_array_almost_equal_nulp(m_hat, sm_hat, nulp=1000)
+
+
+def test_svd_maxiter():
+    # check that maxiter works as expected
+    x = hilbert(6)
+    # ARPACK shouldn't converge on such an ill-conditioned matrix with just
+    # one iteration
+    assert_raises(ArpackNoConvergence, svds, x, 1, maxiter=1)
+    # but 100 iterations should be more than enough
+    u, s, vt = svds(x, 1, maxiter=100)
+    assert_allclose(s, [1.7], atol=0.5)
+
+
+def test_svd_return():
+    # check that the return_singular_vectors parameter works as expected
+    x = hilbert(6)
+    _, s, _ = sorted_svd(x, 2)
+    ss = svds(x, 2, return_singular_vectors=False)
+    assert_allclose(s, ss)
+
+
+def test_svd_which():
+    # check that the which parameter works as expected
+    x = hilbert(6)
+    for which in ['LM', 'SM']:
+        _, s, _ = sorted_svd(x, 2, which=which)
+        ss = svds(x, 2, which=which, return_singular_vectors=False)
+        ss.sort()
+        assert_allclose(s, ss, atol=np.sqrt(1e-15))
+
+
+def test_svd_v0():
+    # check that the v0 parameter works as expected
+    x = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], float)
+
+    u, s, vh = svds(x, 1)
+    u2, s2, vh2 = svds(x, 1, v0=u[:,0])
+
+    assert_allclose(s, s2, atol=np.sqrt(1e-15))
 
 
 if __name__ == "__main__":

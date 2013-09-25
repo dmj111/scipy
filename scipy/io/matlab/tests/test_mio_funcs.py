@@ -3,13 +3,12 @@
 of mat file.
 
 '''
+from __future__ import division, print_function, absolute_import
+
 from os.path import join as pjoin, dirname
 import sys
 
-if sys.version_info[0] >= 3:
-    from io import BytesIO
-else:
-    from cStringIO import StringIO as BytesIO
+from io import BytesIO
 
 from numpy.testing import \
      assert_array_equal, \
@@ -20,12 +19,13 @@ from numpy.testing import \
 from nose.tools import assert_true
 
 import numpy as np
-from numpy.compat import asbytes, asstr
+from numpy.compat import asstr
 
 from scipy.io.matlab.mio5 import MatlabObject, MatFile5Writer, \
       MatFile5Reader, MatlabFunction
 
 test_data_path = pjoin(dirname(__file__), 'data')
+
 
 def read_minimat_vars(rdr):
     rdr.initialize_read()
@@ -44,6 +44,7 @@ def read_minimat_vars(rdr):
             mdict['__globals__'].append(name)
     return mdict
 
+
 def read_workspace_vars(fname):
     fp = open(fname, 'rb')
     rdr = MatFile5Reader(fp, struct_as_record=True)
@@ -54,8 +55,8 @@ def read_workspace_vars(fname):
     rdr.mat_stream = ws_bs
     # Guess byte order.
     mi = rdr.mat_stream.read(2)
-    rdr.byte_order = mi == asbytes('IM') and '<' or '>'
-    rdr.mat_stream.read(4) # presumably byte padding
+    rdr.byte_order = mi == b'IM' and '<' or '>'
+    rdr.mat_stream.read(4)  # presumably byte padding
     mdict = read_minimat_vars(rdr)
     fp.close()
     return mdict

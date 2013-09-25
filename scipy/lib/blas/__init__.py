@@ -2,6 +2,8 @@
 Wrappers to BLAS library
 ========================
 
+NOTE: this module is deprecated -- use scipy.linalg.blas instead!
+
 fblas -- wrappers for Fortran [*] BLAS routines
 cblas -- wrappers for ATLAS BLAS routines
 get_blas_funcs -- query for wrapper functions.
@@ -78,16 +80,27 @@ Level 1 routines
   Prefixes:
     axpy: s,d,c,z
 """
+from __future__ import division, print_function, absolute_import
 
 from warnings import warn
 
 __all__ = ['fblas','cblas','get_blas_funcs']
 
-import fblas
-import cblas
+from . import fblas
+from . import cblas
 
 from numpy import deprecate
 
+
+@deprecate(old_name="scipy.lib.blas", new_name="scipy.linalg.blas")
+def _deprecated():
+    pass
+try:
+    _deprecated()
+except DeprecationWarning as e:
+    # don't fail import if DeprecationWarnings raise error -- works around
+    # the situation with Numpy's test framework
+    pass
 
 _use_force_cblas = 1
 if hasattr(cblas,'empty_module'):
@@ -97,7 +110,7 @@ elif hasattr(fblas,'empty_module'):
     fblas = cblas
 
 
-_type_conv = {'f':'s', 'd':'d', 'F':'c', 'D':'z'} # 'd' will be default for 'i',..
+_type_conv = {'f':'s', 'd':'d', 'F':'c', 'D':'z'}  # 'd' will be default for 'i',..
 _inv_type_conv = {'s':'f','d':'d','c':'F','z':'D'}
 
 
@@ -132,7 +145,7 @@ def get_blas_funcs(names,arrays=(),debug=0):
         m1,m2 = cblas,fblas
     funcs = []
     for name in names:
-        if name=='ger' and dtypechar in 'FD':
+        if name == 'ger' and dtypechar in 'FD':
             name = 'gerc'
         elif name in ('dotc', 'dotu') and dtypechar in 'fd':
             name = 'dot'

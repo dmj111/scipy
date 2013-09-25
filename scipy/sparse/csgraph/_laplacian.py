@@ -7,6 +7,8 @@ Laplacian of a compressed-sparse graph
 #          Jake Vanderplas <vanderplas@astro.washington.edu>
 # License: BSD
 
+from __future__ import division, print_function, absolute_import
+
 import numpy as np
 from scipy.sparse import isspmatrix, coo_matrix
 
@@ -14,26 +16,24 @@ from scipy.sparse import isspmatrix, coo_matrix
 ###############################################################################
 # Graph laplacian
 def laplacian(csgraph, normed=False, return_diag=False):
-    """ Return the Laplacian matrix of a directed graph.  For non-symmetric
-    graphs the out-degree is used in the computation.
+    """ Return the Laplacian matrix of a directed graph.
+
+    For non-symmetric graphs the out-degree is used in the computation.
 
     Parameters
     ----------
-    csgraph: array_like or sparse matrix, 2 dimensions
+    csgraph : array_like or sparse matrix, 2 dimensions
         compressed-sparse graph, with shape (N, N).
-    directed: bool, optional
-        If True (default), then csgraph represents a directed graph.
-    normed: bool, optional
+    normed : bool, optional
         If True, then compute normalized Laplacian.
-    return_diag: bool, optional
+    return_diag : bool, optional
         If True, then return diagonal as well as laplacian.
 
     Returns
     -------
-    lap: ndarray
+    lap : ndarray
         The N x N laplacian matrix of graph.
-
-    diag: ndarray
+    diag : ndarray
         The length-N diagonal of the laplacian matrix.
         diag is returned only if return_diag is True.
 

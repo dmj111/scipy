@@ -59,8 +59,8 @@ call:
 We can list all methods and properties of the distribution with
 ``dir(norm)``.  As it turns out, some of the methods are private
 methods although they are not named as such (their name does not start
-with a leading underscore), for example ``veccdf`` or ``xa`` and
-``xb`` are only available for internal calculation.
+with a leading underscore), for example ``veccdf``, are only available
+for internal calculation.
 
 To obtain the `real` main methods, we list the methods of the frozen
 distribution. (We explain the meaning of a `frozen` distribution
@@ -103,7 +103,7 @@ The main public methods for continuous  RVs are:
 * moment: non-central moments of the distribution
 
 
-Lets take a normal RV as an example.
+Let's take a normal RV as an example.
 
     >>> norm.cdf(0)
     0.5
@@ -129,7 +129,8 @@ Other generally useful methods are supported too:
 To find the median of a distribution we can use the percent point
 function ``ppf``, which is the inverse of the ``cdf``:
 
-    >>> norm..ppf(0.5)
+    >>> norm.ppf(0.5)
+    0.0
 
 To generate a set of random variates: 
 
@@ -141,7 +142,7 @@ Don't think that ``norm.rvs(5)`` generates 5 variates:
     >>> norm.rvs(5)
     7.131624370075814
 
-This brings us, in fact, to topic of the next subsection.
+This brings us, in fact, to the topic of the next subsection.
 
 
 Shifting and Scaling
@@ -185,7 +186,7 @@ The uniform distribution is also interesting:
 Finally, recall from the previous paragraph that we are left with the
 problem of the meaning of ``norm.rvs(5)``. As it turns out, calling a
 distribution like this, the first argument, i.e., the 5, gets passed
-to set the ``loc`` parameter. Lets see:
+to set the ``loc`` parameter. Let's see:
 
     >>> np.mean(norm.rvs(5, size=500))
     4.983550784784704
@@ -209,13 +210,13 @@ additional shape parameters. For instance, the gamma distribution, with density
 
 .. math::
 
-    \gamma(x,n) = \frac{\lambda (\lambda x)^{n-1}}{\Gamma(n)} e^{-\lambda x},
+    \gamma(x,n) = \frac{\lambda (\lambda x)^{n-1}}{\Gamma(n)} e^{-\lambda x}\;,
  
 requires the shape parameter :math:`n`. Observe that setting
 :math:`\lambda` can be obtained by setting the ``scale`` keyword to
 :math:`1/\lambda`.
 
-Lets check the number and name of the shape parameters of the gamma
+Let's check the number and name of the shape parameters of the gamma
 distribution. (We know from the above that this should be 1.)
 
     >>> from scipy.stats import gamma
@@ -228,8 +229,13 @@ Now we set the value of the shape variable to 1 to obtain the
 exponential distribution, so that we compare easily whether we get the
 results we expect.
 
-    >>>  gamma(1, scale=2.).stats(moments = "mv")
+    >>>  gamma(1, scale=2.).stats(moments="mv")
     (array(2.0), array(4.0))
+
+Notice that we can also specify shape parameters as keywords:
+
+   >>> gamma(a=1, scale=2.).stats(moments="mv")
+   (array(2.0), array(4.0))
 
 
 Freezing a Distribution
@@ -396,8 +402,8 @@ and gained a considerable test suite, however a few issues remain:
   inherently not be the best choice.
 
 
-Building  Specific Distributions
---------------------------------
+Building Specific Distributions
+-------------------------------
 
 The next examples shows how to build your own distributions.  Further
 examples show the usage of the distributions and some statistical
@@ -409,11 +415,12 @@ Making a Continuous Distribution, i.e., Subclassing ``rv_continuous``
 
 Making continuous distributions is fairly simple. 
 
-    >>> import scipy
-    >>> class deterministic_gen(scipy.stats.rv_continuous):
-    ...     def _cdf(self, x ): return np.where(x<0, 0., 1.)
-    ...     def _stats(self): return 0., 0., 0., 0.
-    ... 
+    >>> from scipy import stats
+    >>> class deterministic_gen(stats.rv_continuous):
+    ...     def _cdf(self, x ):
+    ...         return np.where(x<0, 0., 1.)
+    ...     def _stats(self):
+    ...         return 0., 0., 0., 0.
 
     >>> deterministic = deterministic_gen(name="deterministic")
     >>> deterministic.cdf(np.arange(-3, 3, 0.5))
@@ -438,7 +445,7 @@ information about the distribution. Thus, as a cautionary example:
     >>> quad(deterministic.pdf, -1e-1, 1e-1)
     (4.163336342344337e-13, 0.0)
 
-But this is not correct: the integral over this pdf should be 1. Lets make the
+But this is not correct: the integral over this pdf should be 1. Let's make the
 integration interval smaller: 
 
     >>> quad(deterministic.pdf, -1e-3, 1e-3) # warning removed
@@ -482,7 +489,7 @@ may be raised or the resulting numbers may be incorrect.
 
 **An Example**
 
-Lets do the work. First
+Let's do the work. First
 
     >>> npoints = 20   # number of integer support points of the distribution minus 1
     >>> npointsh = npoints / 2
@@ -512,7 +519,7 @@ common methods of discrete distributions.
 
 **Testing the Implementation**
 
-Lets generate a random sample and compare observed frequencies with
+Let's generate a random sample and compare observed frequencies with
 the probabilities.
 
     >>> n_sample = 500
@@ -545,12 +552,12 @@ the probabilities.
      [  1.00000000e+01   0.00000000e+00   2.95019349e-02]]
 
 
-.. plot:: examples/normdiscr_plot1.py
+.. plot:: tutorial/examples/normdiscr_plot1.py
    :align: center
    :include-source: 0
 
 
-.. plot:: examples/normdiscr_plot2.py
+.. plot:: tutorial/examples/normdiscr_plot2.py
    :align: center
    :include-source: 0
 
@@ -908,7 +915,7 @@ get a less smoothed out result.
 
     >>> plt.show()
 
-.. plot:: stats/plots/kde_plot2.py
+.. plot:: tutorial/stats/plots/kde_plot2.py
    :align: center
    :include-source: 0
 
@@ -922,7 +929,7 @@ for (close to) normal distributions, but even for unimodal distributions that
 are quite strongly non-normal they work reasonably well.  As a non-normal
 distribution we take a Student's T distribution with 5 degrees of freedom.
 
-.. plot:: stats/plots/kde_plot3.py
+.. plot:: tutorial/stats/plots/kde_plot3.py
    :align: center
    :include-source: 1
 
@@ -965,7 +972,7 @@ each feature.
     >>> ax.set_ylabel('Density')
     >>> plt.show()
 
-.. plot:: stats/plots/kde_plot4.py
+.. plot:: tutorial/stats/plots/kde_plot4.py
    :align: center
    :include-source: 0
 
@@ -1019,7 +1026,7 @@ the individual data points on top.
 
     >>> plt.show()
 
-.. plot:: stats/plots/kde_plot5.py
+.. plot:: tutorial/stats/plots/kde_plot5.py
    :align: center
    :include-source: 0
 

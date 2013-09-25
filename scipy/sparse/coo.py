@@ -1,4 +1,5 @@
 """ A sparse matrix in COOrdinate or 'triplet' format"""
+from __future__ import division, print_function, absolute_import
 
 __docformat__ = "restructuredtext en"
 
@@ -8,12 +9,15 @@ from warnings import warn
 
 import numpy as np
 
-from sparsetools import coo_tocsr, coo_todense, coo_matvec
-from base import isspmatrix
-from data import _data_matrix
-from sputils import upcast, upcast_char, to_native, isshape, getdtype, isintlike
+from scipy.lib.six import zip as izip
 
-class coo_matrix(_data_matrix):
+from .sparsetools import coo_tocsr, coo_todense, coo_matvec
+from .base import isspmatrix
+from .data import _data_matrix, _minmax_mixin
+from .sputils import upcast, upcast_char, to_native, isshape, getdtype, isintlike
+
+
+class coo_matrix(_data_matrix, _minmax_mixin):
     """
     A sparse matrix in COOrdinate format.
 
@@ -115,8 +119,8 @@ class coo_matrix(_data_matrix):
             if isshape(arg1):
                 M, N = arg1
                 self.shape = (M,N)
-                self.row  = np.array([], dtype=np.intc)
-                self.col  = np.array([], dtype=np.intc)
+                self.row = np.array([], dtype=np.intc)
+                self.col = np.array([], dtype=np.intc)
                 self.data = np.array([], getdtype(dtype, default=float))
             else:
                 try:
@@ -130,9 +134,9 @@ class coo_matrix(_data_matrix):
                 except TypeError:
                     raise TypeError('invalid input format')
 
-                self.row  = np.array(ij[0], copy=copy, dtype=np.intc)
-                self.col  = np.array(ij[1], copy=copy, dtype=np.intc)
-                self.data = np.array(  obj, copy=copy)
+                self.row = np.array(ij[0], copy=copy, dtype=np.intc)
+                self.col = np.array(ij[1], copy=copy, dtype=np.intc)
+                self.data = np.array(obj, copy=copy)
 
                 if shape is None:
                     if len(self.row) == 0 or len(self.col) == 0:
@@ -149,24 +153,24 @@ class coo_matrix(_data_matrix):
             # Initialize an empty matrix.
             if not isinstance(shape, tuple) or not isintlike(shape[0]):
                 raise TypeError('dimensions not understood')
-            warn('coo_matrix(None, shape=(M,N)) is deprecated, ' \
+            warn('coo_matrix(None, shape=(M,N)) is deprecated, '
                     'use coo_matrix( (M,N) ) instead', DeprecationWarning)
             self.shape = shape
             self.data = np.array([], getdtype(dtype, default=float))
-            self.row  = np.array([], dtype=np.intc)
-            self.col  = np.array([], dtype=np.intc)
+            self.row = np.array([], dtype=np.intc)
+            self.col = np.array([], dtype=np.intc)
         else:
             if isspmatrix(arg1):
                 if isspmatrix_coo(arg1) and copy:
-                    self.row   = arg1.row.copy()
-                    self.col   = arg1.col.copy()
-                    self.data  = arg1.data.copy()
+                    self.row = arg1.row.copy()
+                    self.col = arg1.col.copy()
+                    self.data = arg1.data.copy()
                     self.shape = arg1.shape
                 else:
                     coo = arg1.tocoo()
-                    self.row   = coo.row
-                    self.col   = coo.col
-                    self.data  = coo.data
+                    self.row = coo.row
+                    self.col = coo.col
+                    self.data = coo.data
                     self.shape = coo.shape
             else:
                 #dense argument
@@ -177,10 +181,11 @@ class coo_matrix(_data_matrix):
 
                 if np.rank(M) != 2:
                     raise TypeError('expected rank <= 2 array or matrix')
+                else:
+                    self.shape = M.shape
 
-                self.shape = M.shape
                 self.row, self.col = M.nonzero()
-                self.data  = M[self.row, self.col]
+                self.data = M[self.row, self.col]
 
         if dtype is not None:
             self.data = self.data.astype(dtype)
@@ -195,7 +200,7 @@ class coo_matrix(_data_matrix):
         if np.rank(self.data) != 1 or np.rank(self.row) != 1 or np.rank(self.col) != 1:
             raise ValueError('row, column, and data arrays must have rank 1')
 
-        return nnz
+        return int(nnz)
     nnz = property(fget=getnnz)
 
     def _check(self):
@@ -204,15 +209,15 @@ class coo_matrix(_data_matrix):
 
         # index arrays should have integer data types
         if self.row.dtype.kind != 'i':
-            warn("row index array has non-integer dtype (%s)  " \
-                    % self.row.dtype.name )
+            warn("row index array has non-integer dtype (%s)  "
+                    % self.row.dtype.name)
         if self.col.dtype.kind != 'i':
-            warn("col index array has non-integer dtype (%s) " \
-                    % self.col.dtype.name )
+            warn("col index array has non-integer dtype (%s) "
+                    % self.col.dtype.name)
 
         # only support 32-bit ints for now
-        self.row  = np.asarray(self.row, dtype=np.intc)
-        self.col  = np.asarray(self.col, dtype=np.intc)
+        self.row = np.asarray(self.row, dtype=np.intc)
+        self.col = np.asarray(self.col, dtype=np.intc)
         self.data = to_native(self.data)
 
         if nnz > 0:
@@ -224,7 +229,6 @@ class coo_matrix(_data_matrix):
                 raise ValueError('negative row index found')
             if self.col.min() < 0:
                 raise ValueError('negative column index found')
-
 
     def transpose(self, copy=False):
         M,N = self.shape
@@ -261,17 +265,17 @@ class coo_matrix(_data_matrix):
                 [0, 0, 0, 1]])
 
         """
-        from csc import csc_matrix
+        from .csc import csc_matrix
         if self.nnz == 0:
             return csc_matrix(self.shape, dtype=self.dtype)
         else:
             M,N = self.shape
-            indptr  = np.empty(N + 1,    dtype=np.intc)
+            indptr = np.empty(N + 1, dtype=np.intc)
             indices = np.empty(self.nnz, dtype=np.intc)
-            data    = np.empty(self.nnz, dtype=upcast(self.dtype))
+            data = np.empty(self.nnz, dtype=upcast(self.dtype))
 
-            coo_tocsr(N, M, self.nnz, \
-                      self.col, self.row, self.data, \
+            coo_tocsr(N, M, self.nnz,
+                      self.col, self.row, self.data,
                       indptr, indices, data)
 
             A = csc_matrix((data, indices, indptr), shape=self.shape)
@@ -299,17 +303,17 @@ class coo_matrix(_data_matrix):
                 [0, 0, 0, 1]])
 
         """
-        from csr import csr_matrix
+        from .csr import csr_matrix
         if self.nnz == 0:
             return csr_matrix(self.shape, dtype=self.dtype)
         else:
             M,N = self.shape
-            indptr  = np.empty(M + 1,    dtype=np.intc)
+            indptr = np.empty(M + 1, dtype=np.intc)
             indices = np.empty(self.nnz, dtype=np.intc)
-            data    = np.empty(self.nnz, dtype=upcast(self.dtype))
+            data = np.empty(self.nnz, dtype=upcast(self.dtype))
 
-            coo_tocsr(M, N, self.nnz, \
-                      self.row, self.col, self.data, \
+            coo_tocsr(M, N, self.nnz,
+                      self.row, self.col, self.data,
                       indptr, indices, data)
 
             A = csr_matrix((data, indices, indptr), shape=self.shape)
@@ -324,9 +328,9 @@ class coo_matrix(_data_matrix):
             return self
 
     def todia(self):
-        from dia import dia_matrix
+        from .dia import dia_matrix
 
-        ks = self.col - self.row  #the diagonal for each nonzero
+        ks = self.col - self.row  # the diagonal for each nonzero
         diags = np.unique(ks)
 
         if len(diags) > 100:
@@ -335,21 +339,22 @@ class coo_matrix(_data_matrix):
             pass
 
         #initialize and fill in data array
-        data = np.zeros( (len(diags), self.col.max()+1), dtype=self.dtype)
-        data[ np.searchsorted(diags,ks), self.col ] = self.data
+        if self.data.size == 0:
+            data = np.zeros((0, 0), dtype=self.dtype)
+        else:
+            data = np.zeros((len(diags), self.col.max()+1), dtype=self.dtype)
+            data[np.searchsorted(diags,ks), self.col] = self.data
 
         return dia_matrix((data,diags), shape=self.shape)
 
     def todok(self):
-        from itertools import izip
-        from dok import dok_matrix
+        from .dok import dok_matrix
 
         dok = dok_matrix((self.shape), dtype=self.dtype)
 
-        dok.update( izip(izip(self.row,self.col),self.data) )
+        dok.update(izip(izip(self.row,self.col),self.data))
 
         return dok
-
 
     # needed by _data_matrix
     def _with_data(self,data,copy=True):
@@ -358,10 +363,10 @@ class coo_matrix(_data_matrix):
         (i.e. .row and .col) are copied.
         """
         if copy:
-            return coo_matrix( (data, (self.row.copy(), self.col.copy()) ), \
+            return coo_matrix((data, (self.row.copy(), self.col.copy())),
                                    shape=self.shape, dtype=data.dtype)
         else:
-            return coo_matrix( (data, (self.row, self.col) ), \
+            return coo_matrix((data, (self.row, self.col)),
                                    shape=self.shape, dtype=data.dtype)
 
     ###########################
@@ -370,14 +375,14 @@ class coo_matrix(_data_matrix):
 
     def _mul_vector(self, other):
         #output array
-        result = np.zeros( self.shape[0], dtype=upcast_char(self.dtype.char,
-                                                            other.dtype.char) )
+        result = np.zeros(self.shape[0], dtype=upcast_char(self.dtype.char,
+                                                            other.dtype.char))
         coo_matvec(self.nnz, self.row, self.col, self.data, other, result)
         return result
 
     def _mul_multivector(self, other):
-        return np.hstack( [ self._mul_vector(col).reshape(-1,1) for col in other.T ] )
+        return np.hstack([self._mul_vector(col).reshape(-1,1) for col in other.T])
 
 
-def isspmatrix_coo( x ):
+def isspmatrix_coo(x):
     return isinstance(x, coo_matrix)

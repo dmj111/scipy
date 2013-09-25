@@ -1,11 +1,13 @@
 # Author: Gael Varoquaux <gael.varoquaux@normalesup.org>
 #         Jake Vanderplas <vanderplas@astro.washington.edu>
 # License: BSD
+from __future__ import division, print_function, absolute_import
 
 import numpy as np
 from scipy import sparse
 
 from scipy.sparse import csgraph
+
 
 def _explicit_laplacian(x, normed=False):
     if sparse.issparse(x):
@@ -20,6 +22,7 @@ def _explicit_laplacian(x, normed=False):
         y /= d[:,None]**.5
         y /= d[None,:]**.5
     return y
+
 
 def _check_graph_laplacian(mat, normed):
     if not hasattr(mat, 'shape'):
@@ -38,13 +41,14 @@ def _check_graph_laplacian(mat, normed):
                                              np.zeros(n_nodes))
     np.testing.assert_array_almost_equal(laplacian.T,
                                          laplacian)
-    np.testing.assert_array_almost_equal(\
+    np.testing.assert_array_almost_equal(
         laplacian,
         csgraph.laplacian(sp_mat, normed=normed).todense())
 
     np.testing.assert_array_almost_equal(
         laplacian,
         _explicit_laplacian(mat, normed=normed))
+
 
 def test_graph_laplacian():
     mats = ('np.arange(10) * np.arange(10)[:, np.newaxis]',

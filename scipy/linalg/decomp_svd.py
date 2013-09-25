@@ -1,17 +1,19 @@
 """SVD decomposition functions."""
+from __future__ import division, print_function, absolute_import
 
 import numpy
-from numpy import asarray_chkfinite, zeros, r_, diag
+from numpy import asarray_chkfinite, asarray, zeros, r_, diag
 from scipy.linalg import calc_lwork
 
 # Local imports.
-from misc import LinAlgError, _datacopied
-from lapack import get_lapack_funcs
+from .misc import LinAlgError, _datacopied
+from .lapack import get_lapack_funcs
 
 __all__ = ['svd', 'svdvals', 'diagsvd', 'orth']
 
 
-def svd(a, full_matrices=True, compute_uv=True, overwrite_a=False):
+def svd(a, full_matrices=True, compute_uv=True, overwrite_a=False,
+        check_finite=True):
     """
     Singular Value Decomposition.
 
@@ -22,8 +24,8 @@ def svd(a, full_matrices=True, compute_uv=True, overwrite_a=False):
 
     Parameters
     ----------
-    a : ndarray
-        Matrix to decompose, of shape ``(M,N)``.
+    a : (M, N) array_like
+        Matrix to decompose.
     full_matrices : bool, optional
         If True, `U` and `Vh` are of shape ``(M,M)``, ``(N,N)``.
         If False, the shapes are ``(M,K)`` and ``(K,N)``, where
@@ -34,6 +36,10 @@ def svd(a, full_matrices=True, compute_uv=True, overwrite_a=False):
     overwrite_a : bool, optional
         Whether to overwrite `a`; may improve performance.
         Default is False.
+    check_finite : boolean, optional
+        Whether to check that the input matrix contains only finite numbers.
+        Disabling may give a performance gain, but may result in problems
+        (crashes, non-termination) if the inputs do contain infinities or NaNs.
 
     Returns
     -------
@@ -79,18 +85,20 @@ def svd(a, full_matrices=True, compute_uv=True, overwrite_a=False):
     True
 
     """
-    a1 = asarray_chkfinite(a)
+    if check_finite:
+        a1 = asarray_chkfinite(a)
+    else:
+        a1 = asarray(a)
     if len(a1.shape) != 2:
         raise ValueError('expected matrix')
     m,n = a1.shape
     overwrite_a = overwrite_a or (_datacopied(a1, a))
     gesdd, = get_lapack_funcs(('gesdd',), (a1,))
-    if gesdd.module_name[:7] == 'flapack':
-        lwork = calc_lwork.gesdd(gesdd.prefix, m, n, compute_uv)[1]
-        u,s,v,info = gesdd(a1,compute_uv = compute_uv, lwork = lwork,
-                           full_matrices=full_matrices, overwrite_a = overwrite_a)
-    else: # 'clapack'
-        raise NotImplementedError('calling gesdd from %s' % gesdd.module_name)
+
+    lwork = calc_lwork.gesdd(gesdd.typecode, m, n, compute_uv)[1]
+    u,s,v,info = gesdd(a1,compute_uv=compute_uv, lwork=lwork,
+                       full_matrices=full_matrices, overwrite_a=overwrite_a)
+
     if info > 0:
         raise LinAlgError("SVD did not converge")
     if info < 0:
@@ -101,23 +109,27 @@ def svd(a, full_matrices=True, compute_uv=True, overwrite_a=False):
     else:
         return s
 
-def svdvals(a, overwrite_a=False):
+
+def svdvals(a, overwrite_a=False, check_finite=True):
     """
     Compute singular values of a matrix.
 
     Parameters
     ----------
-    a : ndarray
-        Matrix to decompose, of shape ``(M, N)``.
+    a : (M, N) array_like
+        Matrix to decompose.
     overwrite_a : bool, optional
         Whether to overwrite `a`; may improve performance.
         Default is False.
+    check_finite : boolean, optional
+        Whether to check that the input matrix contains only finite numbers.
+        Disabling may give a performance gain, but may result in problems
+        (crashes, non-termination) if the inputs do contain infinities or NaNs.
 
     Returns
     -------
-    s : ndarray
+    s : (min(M, N),) ndarray
         The singular values, sorted in decreasing order.
-        Of shape ``(K,)``, with``K = min(M, N)``.
 
     Raises
     ------
@@ -130,7 +142,9 @@ def svdvals(a, overwrite_a=False):
     diagsvd : Construct the Sigma matrix, given the vector s.
 
     """
-    return svd(a, compute_uv=0, overwrite_a=overwrite_a)
+    return svd(a, compute_uv=0, overwrite_a=overwrite_a,
+                check_finite=check_finite)
+
 
 def diagsvd(s, M, N):
     """
@@ -138,7 +152,7 @@ def diagsvd(s, M, N):
 
     Parameters
     ----------
-    s : array_like, shape (M,) or (N,)
+    s : (M,) or (N,) array_like
         Singular values
     M : int
         Size of the matrix whose singular values are `s`.
@@ -147,7 +161,7 @@ def diagsvd(s, M, N):
 
     Returns
     -------
-    S : array, shape (M, N)
+    S : (M, N) ndarray
         The S-matrix in the singular value decomposition
 
     """
@@ -165,15 +179,17 @@ def diagsvd(s, M, N):
 # Orthonormal decomposition
 
 def orth(A):
-    """Construct an orthonormal basis for the range of A using SVD
+    """
+    Construct an orthonormal basis for the range of A using SVD
 
     Parameters
     ----------
-    A : array, shape (M, N)
+    A : (M, N) ndarray
+        Input array
 
     Returns
     -------
-    Q : array, shape (M, K)
+    Q : (M, K) ndarray
         Orthonormal basis for the range of A.
         K = effective rank of A, as determined by automatic cutoff
 

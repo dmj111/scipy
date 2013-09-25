@@ -31,6 +31,7 @@ Basics
    lstsq - Solve a linear least-squares problem
    pinv - Pseudo-inverse (Moore-Penrose) using lstsq
    pinv2 - Pseudo-inverse using svd
+   pinvh - Pseudo-inverse of hermitian matrix
    kron - Kronecker product of two arrays
    tril - Construct a lower-triangular matrix from a given matrix
    triu - Construct an upper-triangular matrix from a given matrix
@@ -66,6 +67,7 @@ Decompositions
    cho_factor - Cholesky decomposition for use in solving a linear system
    cho_solve - Solve previously factored linear system
    cho_solve_banded - Solve previously factored banded linear system
+   polar - Compute the polar decomposition.
    qr - QR decomposition of a matrix
    qr_multiply - QR decomposition and multiplication by Q
    qz - QZ decomposition of a pair of matrices
@@ -73,15 +75,18 @@ Decompositions
    rsf2csf - Real to complex Schur form
    hessenberg - Hessenberg form of a matrix
 
+.. seealso::
+
+   `scipy.linalg.interpolative` -- Interpolative matrix decompositions
+
+
 Matrix Functions
 ================
 
 .. autosummary::
    :toctree: generated/
 
-   expm - Matrix exponential using Pade approximation
-   expm2 - Matrix exponential using eigenvalue decomposition
-   expm3 - Matrix exponential using Taylor-series expansion
+   expm - Matrix exponential
    logm - Matrix logarithm
    cosm - Matrix cosine
    sinm - Matrix sine
@@ -92,6 +97,8 @@ Matrix Functions
    signm - Matrix sign
    sqrtm - Matrix square root
    funm - Evaluating an arbitrary matrix function
+   expm_frechet - Frechet derivative of the matrix exponential
+   fractional_matrix_power - Fractional matrix power
 
 
 Matrix Equation Solvers
@@ -125,25 +132,45 @@ Special Matrices
    toeplitz - Toeplitz matrix
    tri - Construct a matrix filled with ones at and below a given diagonal
 
+Low-level routines
+==================
+
+.. autosummary::
+   :toctree: generated/
+
+   get_blas_funcs
+   get_lapack_funcs
+   find_best_blas_type
+
+.. seealso::
+
+   `scipy.linalg.blas` -- Low-level BLAS functions
+
+   `scipy.linalg.lapack` -- Low-level LAPACK functions
+
 """
 
-from linalg_version import linalg_version as __version__
+from __future__ import division, print_function, absolute_import
 
-from misc import *
-from basic import *
-from decomp import *
-from decomp_lu import *
-from decomp_cholesky import *
-from decomp_qr import *
-from _decomp_qz import *
-from decomp_svd import *
-from decomp_schur import *
-from matfuncs import *
-from blas import *
-from special_matrices import *
-from _solvers import *
+from .linalg_version import linalg_version as __version__
 
-__all__ = filter(lambda s: not s.startswith('_'), dir())
+from .misc import *
+from .basic import *
+from .decomp import *
+from .decomp_lu import *
+from .decomp_cholesky import *
+from .decomp_qr import *
+from ._decomp_qz import *
+from .decomp_svd import *
+from .decomp_schur import *
+from ._decomp_polar import *
+from .matfuncs import *
+from .blas import *
+from .lapack import *
+from .special_matrices import *
+from ._solvers import *
+
+__all__ = [s for s in dir() if not s.startswith('_')]
 
 from numpy.dual import register_func
 for k in ['norm', 'inv', 'svd', 'solve', 'det', 'eig', 'eigh', 'eigvals',

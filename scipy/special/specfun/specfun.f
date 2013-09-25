@@ -13,6 +13,18 @@ C
 C      Changed GAMMA to GAMMA2 and PSI to PSI_SPEC to avoid potential conflicts.
 C
 
+        FUNCTION DNAN()
+        DOUBLE PRECISION DNAN
+        DNAN = 0.0D0
+        DNAN = 0.0D0/DNAN
+        END
+
+        FUNCTION DINF()
+        DOUBLE PRECISION DINF
+        DINF = 1.0D300
+        DINF = DINF*DINF
+        END
+
         SUBROUTINE CPDSA(N,Z,CDN)
 C
 C       ===========================================================
@@ -236,7 +248,7 @@ C       Output:  CPM(m,n) --- Pmn(z)
 C                CPD(m,n) --- Pmn'(z)
 C       =========================================================
 C
-        IMPLICIT DOUBLE PRECISION (X,Y)
+        IMPLICIT DOUBLE PRECISION (D,X,Y)
         IMPLICIT COMPLEX*16 (C,Z)
         DIMENSION CPM(0:MM,0:N),CPD(0:MM,0:N)
         Z=CMPLX(X,Y)
@@ -253,32 +265,39 @@ C
            DO 20 J=1,N
            DO 20 I=1,M
               IF (I.EQ.1) THEN
-                 CPD(I,J)=(1.0D+300,0.0D0)
+                 CPD(I,J)=DINF()
               ELSE IF (I.EQ.2) THEN
                  CPD(I,J)=-0.25D0*(J+2)*(J+1)*J*(J-1)*X**(J+1)
               ENDIF
 20         CONTINUE
            RETURN
         ENDIF
-        LS=1
-        IF (CDABS(Z).GT.1.0D0) LS=-1
-        ZQ=CDSQRT(LS*(1.0D0-Z*Z))
-        ZS=LS*(1.0D0-Z*Z)
+C       sqrt(z^2 - 1) with branch cut between [-1, 1]
+        ZQ=CDSQRT(Z*Z-1.0D0)
+        IF (X.LT.0D0) THEN
+           ZQ=-ZQ
+        END IF
+        ZS=(Z*Z-1.0D0)
         DO 25 I=1,M
-25         CPM(I,I)=-LS*(2.0D0*I-1.0D0)*ZQ*CPM(I-1,I-1)
-        DO 30 I=0,M
+C       DLMF 14.7.15
+25         CPM(I,I)=(2.0D0*I-1.0D0)*ZQ*CPM(I-1,I-1)
+        DO 30 I=0,MIN(M,N-1)
+C       DLMF 14.10.7
 30         CPM(I,I+1)=(2.0D0*I+1.0D0)*Z*CPM(I,I)
         DO 35 I=0,M
         DO 35 J=I+2,N
+C       DLMF 14.10.3
            CPM(I,J)=((2.0D0*J-1.0D0)*Z*CPM(I,J-1)-(I+J-
      &              1.0D0)*CPM(I,J-2))/(J-I)
 35      CONTINUE
         CPD(0,0)=(0.0D0,0.0D0)
         DO 40 J=1,N
-40         CPD(0,J)=LS*J*(CPM(0,J-1)-Z*CPM(0,J))/ZS
+C       DLMF 14.10.5
+40         CPD(0,J)=J*(Z*CPM(0,J)-CPM(0,J-1))/ZS
         DO 45 I=1,M
         DO 45 J=I,N
-           CPD(I,J)=LS*I*Z*CPM(I,J)/ZS+(J+I)*(J-I+1.0D0)
+C       derivative of DLMF 14.7.11 & DLMF 14.10.6
+           CPD(I,J)=-I*Z*CPM(I,J)/ZS+(J+I)*(J-I+1.0D0)
      &              /ZQ*CPM(I-1,J)
 45      CONTINUE
         RETURN
@@ -1611,7 +1630,8 @@ C
         IMPLICIT DOUBLE PRECISION (A-H,O-Z)
         IF (M.LE.12.OR.Q.LE.3.0*M.OR.Q.GT.M*M) THEN
             CALL CV0(KD,M,Q,A)
-            IF (Q.NE.0.0D0) CALL REFINE(KD,M,Q,A)
+            IF (Q.NE.0.0D0.AND.M.NE.2) CALL REFINE(KD,M,Q,A)
+            IF (Q.GT.2.0D-3.AND.M.EQ.2) CALL REFINE(KD,M,Q,A)
         ELSE
            NDIV=10
            DELTA=(M-3.0)*M/NDIV
@@ -3064,7 +3084,7 @@ C
      &          .152746185967848D-01, .126781664768159D-01,
      &          .100475571822880D-01, .738993116334531D-02,
      &          .471272992695363D-02, .202681196887362D-02/
-        ID=7
+        ID=9
         A1=A-1.0D0
         B1=B-A-1.0D0
         C=12.0D0/X
@@ -3085,7 +3105,7 @@ C
               HU1=HU1+S*G
               D=D+2.0D0*G
 15         CONTINUE
-           IF (DABS(1.0D0-HU0/HU1).LT.1.0D-7) GO TO 25
+           IF (DABS(1.0D0-HU0/HU1).LT.1.0D-9) GO TO 25
            HU0=HU1
 20      CONTINUE
 25      CALL GAMMA2(A,GA)
@@ -3108,7 +3128,7 @@ C
               HU2=HU2+S*G
               D=D+2.0D0*G
 35         CONTINUE
-           IF (DABS(1.0D0-HU0/HU2).LT.1.0D-7) GO TO 45
+           IF (DABS(1.0D0-HU0/HU2).LT.1.0D-9) GO TO 45
            HU0=HU2
 40      CONTINUE
 45      CALL GAMMA2(A,GA)
@@ -4952,13 +4972,13 @@ C
         IF (B.NE.INT(B)) THEN
            CALL CHGUS(A,B,X,HU,ID1)
            MD=1
-           IF (ID1.GE.6) RETURN
+           IF (ID1.GE.9) RETURN
            HU1=HU
         ENDIF
         IF (IL1.OR.IL2.OR.IL3) THEN
            CALL CHGUL(A,B,X,HU,ID)
            MD=2
-           IF (ID.GE.6) RETURN
+           IF (ID.GE.9) RETURN
            IF (ID1.GT.ID) THEN
               MD=1
               ID=ID1
@@ -5183,7 +5203,7 @@ C
         IF (M.LE.2) THEN
            T2=0.0D0
            IF (KD.EQ.1.AND.M.EQ.0) T1=T1+T1
-           IF (KD.EQ.1.AND.M.EQ.2) T1=-2.0*Q*Q/(4.0-B+T1)-4.0
+           IF (KD.EQ.1.AND.M.EQ.2) T1=-2.0D0*Q*Q/(4.0D0-B+T1)-4.0D0
            IF (KD.EQ.2.AND.M.EQ.1) T1=T1+Q
            IF (KD.EQ.3.AND.M.EQ.1) T1=T1-Q
         ELSE
@@ -5571,9 +5591,20 @@ C       Output:  EI --- Ei(x)
 C       ============================================
 C
         IMPLICIT NONE
-        DOUBLE COMPLEX Z, CEI
+        DOUBLE COMPLEX Z, CEI, IMF
+        DOUBLE PRECISION PI
+        PI=3.141592653589793D0
         CALL E1Z(-Z, CEI)
-        CEI = -CEI + (CDLOG(Z) - CDLOG(1D0/Z))/2D0 - CDLOG(-Z)
+        CEI = -CEI
+        IF (DIMAG(Z).GT.0) THEN
+           CEI = CEI + (0d0,1d0)*PI
+        ELSE IF (DIMAG(Z).LT.0) THEN
+           CEI = CEI - (0d0,1d0)*PI
+        ELSE IF (DIMAG(Z).EQ.0) THEN
+           IF (DBLE(Z).GT.0) THEN
+              CEI = CEI - (0d0,1d0)*PI
+           ENDIF
+        ENDIF
         RETURN
         END
 
@@ -6934,7 +6965,8 @@ C       **********************************
 C
 C       =====================================================
 C       Purpose: Compute the associated Legendre functions
-C                Pmn(x) and their derivatives Pmn'(x)
+C                Pmn(x) and their derivatives Pmn'(x) for
+C                real argument
 C       Input :  x  --- Argument of Pmn(x)
 C                m  --- Order of Pmn(x),  m = 0,1,2,...,n
 C                n  --- Degree of Pmn(x), n = 0,1,2,...,N
@@ -6943,7 +6975,7 @@ C       Output:  PM(m,n) --- Pmn(x)
 C                PD(m,n) --- Pmn'(x)
 C       =====================================================
 C
-        IMPLICIT DOUBLE PRECISION (P,X)
+        IMPLICIT DOUBLE PRECISION (D,P,X)
         DIMENSION PM(0:MM,0:N),PD(0:MM,0:N)
         INTRINSIC MIN
         DO 10 I=0,N
@@ -6959,7 +6991,7 @@ C
            DO 20 J=1,N
            DO 20 I=1,M
               IF (I.EQ.1) THEN
-                 PD(I,J)=1.0D+300
+                 PD(I,J)=DINF()
               ELSE IF (I.EQ.2) THEN
                  PD(I,J)=-0.25D0*(J+2)*(J+1)*J*(J-1)*X**(J+1)
               ENDIF
@@ -6969,6 +7001,8 @@ C
         LS=1
         IF (DABS(X).GT.1.0D0) LS=-1
         XQ=DSQRT(LS*(1.0D0-X*X))
+C       Ensure connection to the complex-valued function for |x| > 1
+        IF (X.LT.-1D0) XQ=-XQ
         XS=LS*(1.0D0-X*X)
         DO 30 I=1,M
 30         PM(I,I)=-LS*(2.0D0*I-1.0D0)*XQ*PM(I-1,I-1)
@@ -7024,6 +7058,11 @@ C
            QM=17.0+3.1*SQRT(Q)-.126*Q+.0037*SQRT(Q)*Q
         ENDIF
         KM=INT(QM+0.5*M)
+        IF(KM.GT.251) THEN
+           CSF=DNAN()
+           CSD=DNAN()
+           RETURN
+        END IF
         CALL FCOEF(KD,M,Q,A,FG)
         IC=INT(M/2)+1
         RD=1.74532925199433D-2
@@ -7873,7 +7912,7 @@ C
 C       =======================================================
 C       Purpose: Compute the associated Legendre function
 C                Pmv(x) with an integer order and an arbitrary
-C                degree v, using down-recursion for large degrees
+C                degree v, using recursion for large degrees
 C       Input :  x   --- Argument of Pm(x)  ( -1 ≤ x ≤ 1 )
 C                m   --- Order of Pmv(x)
 C                v   --- Degree of Pmv(x)
@@ -7883,8 +7922,8 @@ C       =======================================================
 C
         IMPLICIT DOUBLE PRECISION (A-H,O-Z)
         IF (X.EQ.-1.0D0.AND.V.NE.INT(V)) THEN
-           IF (M.EQ.0) PMV=-1.0D+300
-           IF (M.NE.0) PMV=1.0D+300
+           IF (M.EQ.0) PMV=-DINF()
+           IF (M.NE.0) PMV=DINF()
            RETURN
         ENDIF
         VX=V
@@ -7893,11 +7932,15 @@ C
            VX=-VX-1
         ENDIF
         NEG_M=0
-        IF (M.LT.0.AND.(VX+M+1).GT.0D0) THEN
-C          XXX: does not handle the cases where AMS 8.2.5
-C               does not help
-           NEG_M=1
-           MX=-M
+        IF (M.LT.0) THEN
+           IF ((VX+M+1).GT.0D0.OR.VX.NE.INT(VX)) THEN
+              NEG_M=1
+              MX=-M
+           ELSE
+C             We don't handle cases where DLMF 14.9.3 doesn't help
+              PMV=DNAN()
+              RETURN
+           END IF
         ENDIF
         NV=INT(VX)
         V0=VX-NV
@@ -7915,7 +7958,7 @@ C          Up-recursion on degree, AMS 8.5.3
            CALL LPMV0(VX, MX, X, PMV)
         ENDIF
         IF (NEG_M.NE.0.AND.ABS(PMV).LT.1.0D+300) THEN
-C          AMS 8.2.5, for integer order
+C          DLMF 14.9.3
            CALL GAMMA2(VX-MX+1, G1)
            CALL GAMMA2(VX+MX+1, G2)
            PMV = PMV*G1/G2 * (-1)**MX
@@ -8629,23 +8672,59 @@ C
         DIMENSION FC(251)
         DO 5 I=1,251
 5          FC(I)=0.0D0
-        IF (Q.LE.1.0D0) THEN
+        IF (DABS(Q).LE.1.0D-7) THEN
+C          Expansion up to order Q^1 (Abramowitz & Stegun 20.2.27-28)
+           IF (KD.EQ.1) THEN
+              JM=M/2 + 1
+           ELSE IF (KD.EQ.2.OR.KD.EQ.3) THEN
+              JM=(M-1)/2+1
+           ELSE IF (KD.EQ.4) THEN
+              JM=M/2
+           END IF
+C          Check for overflow
+           IF (JM+1.GT.251) GOTO 6
+C          Proceed using the simplest expansion
+           IF (KD.EQ.1.OR.KD.EQ.2) THEN
+              IF (M.EQ.0) THEN
+                 FC(1) = 1/SQRT(2.0D0)
+                 FC(2) = -Q/2.0D0/SQRT(2.0D0)
+              ELSE IF (M.EQ.1) THEN
+                 FC(1) = 1.0D0
+                 FC(2) = -Q/8.0D0
+              ELSE IF (M.EQ.2) THEN
+                 FC(1) = Q/4.0D0
+                 FC(2) = 1.0D0
+                 FC(3) = -Q/12.0D0
+              ELSE
+                 FC(JM) = 1.0D0
+                 FC(JM+1) = -Q/(4.0D0 * (M + 1))
+                 FC(JM-1) =  Q/(4.0D0 * (M - 1))
+              END IF
+           ELSE IF (KD.EQ.3.OR.KD.EQ.4) THEN
+              IF (M.EQ.1) THEN
+                 FC(1) = 1.0D0
+                 FC(2) = -Q/8.0D0
+              ELSE IF (M.EQ.2) THEN
+                 FC(1) = 1.0D0
+                 FC(2) = -Q/12.0D0
+              ELSE
+                 FC(JM) = 1.0D0
+                 FC(JM+1) = -Q/(4.0D0 * (M + 1))
+                 FC(JM-1) =  Q/(4.0D0 * (M - 1))
+              END IF
+           ENDIF
+           RETURN
+        ELSE IF (Q.LE.1.0D0) THEN
            QM=7.5+56.1*SQRT(Q)-134.7*Q+90.7*SQRT(Q)*Q
         ELSE
            QM=17.0+3.1*SQRT(Q)-.126*Q+.0037*SQRT(Q)*Q
         ENDIF
         KM=INT(QM+0.5*M)
-        IF (Q.EQ.0.0D0) THEN
-           DO 10 K=1,KM
-10            FC(K)=0.0D0
-           IF (KD.EQ.1) THEN
-              FC((M+2)/2)=1.0D0
-              IF (M.EQ.0) FC(1)=1.0D0/DSQRT(2.0D0)
-           ELSE IF (KD.EQ.4) THEN
-              FC(M/2)=1.0D0
-           ELSE
-              FC((M+1)/2)=1.0D0
-           ENDIF
+        IF (KM.GT.251) THEN
+C          Overflow, generate NaNs
+ 6         FNAN=DNAN()
+           DO 7 I=1,251
+ 7            FC(I)=FNAN
            RETURN
         ENDIF
         KB=0
@@ -9123,24 +9202,49 @@ C
         EL=0.5772156649015328D0
         X=DBLE(Z)
         A0=CDABS(Z)
+C       Continued fraction converges slowly near negative real axis,
+C       so use power series in a wedge around it until radius 40.0
+        XT=-2*DABS(DIMAG(Z))
         IF (A0.EQ.0.0D0) THEN
            CE1=(1.0D+300,0.0D0)
-        ELSE IF (A0.LE.10.0.OR.X.LT.0.0.AND.A0.LT.20.0) THEN
+        ELSE IF (A0.LE.5.0.OR.X.LT.XT.AND.A0.LT.40.0) THEN
+C          Power series
            CE1=(1.0D0,0.0D0)
            CR=(1.0D0,0.0D0)
-           DO 10 K=1,150
+           DO 10 K=1,500
               CR=-CR*K*Z/(K+1.0D0)**2
               CE1=CE1+CR
               IF (CDABS(CR).LE.CDABS(CE1)*1.0D-15) GO TO 15
 10         CONTINUE
-15         CE1=-EL-CDLOG(Z)+Z*CE1
+15         CONTINUE
+           IF (X.LE.0.0.AND.DIMAG(Z).EQ.0.0) THEN
+C             Careful on the branch cut -- avoid signed zeros
+              CE1=-EL-CDLOG(-Z)+Z*CE1-PI*(0.0D0,1.0D0)
+           ELSE
+              CE1=-EL-CDLOG(Z)+Z*CE1
+           ENDIF
         ELSE
-           CT0=(0.0D0,0.0D0)
-           DO 20 K=120,1,-1
-              CT0=K/(1.0D0+K/(Z+CT0))
+C          Continued fraction http://dlmf.nist.gov/6.9
+C
+C                           1     1     1     2     2     3     3
+C          E1 = exp(-z) * ----- ----- ----- ----- ----- ----- ----- ...
+C                         Z +   1 +   Z +   1 +   Z +   1 +   Z +
+           ZC=0D0
+           ZD=1/Z
+           ZDC=1*ZD
+           ZC=ZC + ZDC
+           DO 20 K=1,500
+              ZD=1/(ZD*K + 1)
+              ZDC=(1*ZD - 1)*ZDC
+              ZC=ZC + ZDC
+
+              ZD=1/(ZD*K + Z)
+              ZDC=(Z*ZD - 1)*ZDC
+              ZC=ZC + ZDC
+
+              IF (CDABS(ZDC).LE.CDABS(ZC)*1.0D-15.AND.K.GT.20) GO TO 25
 20         CONTINUE
-           CT=1.0D0/(Z+CT0)
-           CE1=CDEXP(-Z)*CT
+25         CE1=CDEXP(-Z)*ZC
            IF (X.LE.0.0.AND.DIMAG(Z).EQ.0.0) CE1=CE1-PI*(0.0D0,1.0D0)
         ENDIF
         RETURN
@@ -12443,6 +12547,13 @@ C
            QM=17.0+3.1*SQRT(Q)-.126*Q+.0037*SQRT(Q)*Q
         ENDIF
         KM=INT(QM+0.5*M)
+        IF(KM.GE.251) THEN
+           F1R=DNAN()
+           D1R=DNAN()
+           F2R=DNAN()
+           D2R=DNAN()
+           RETURN
+        END IF
         CALL FCOEF(KD,M,Q,A,FG)
         IC=INT(M/2)+1
         IF (KD.EQ.4) IC=M/2
@@ -12450,8 +12561,8 @@ C
         C2=DEXP(X)
         U1=DSQRT(Q)*C1
         U2=DSQRT(Q)*C2
-        CALL JYNB(KM,U1,NM,BJ1,DJ1,BY1,DY1)
-        CALL JYNB(KM,U2,NM,BJ2,DJ2,BY2,DY2)
+        CALL JYNB(KM+1,U1,NM,BJ1,DJ1,BY1,DY1)
+        CALL JYNB(KM+1,U2,NM,BJ2,DJ2,BY2,DY2)
         W1=0.0D0
         W2=0.0D0
         IF (KC.EQ.2) GO TO 50

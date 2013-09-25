@@ -32,11 +32,15 @@
 # WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+from __future__ import division, print_function, absolute_import
 
 import os.path
 
 import numpy as np
 from numpy.testing import TestCase, run_module_suite
+
+from scipy.lib.six import xrange
+from scipy.lib.six import u
 
 from scipy.cluster.hierarchy import linkage, from_mlab_linkage, to_mlab_linkage,\
         num_obs_linkage, inconsistent, cophenet, fclusterdata, fcluster, \
@@ -45,12 +49,12 @@ from scipy.cluster.hierarchy import linkage, from_mlab_linkage, to_mlab_linkage,
         is_valid_linkage, is_valid_im, to_tree, leaves_list, dendrogram
 from scipy.spatial.distance import squareform, pdist
 
-_tdist = np.array([[0,    662,  877,  255,  412,  996],
-                   [662,  0,    295,  468,  268,  400],
-                   [877,  295,  0,    754,  564,  138],
-                   [255,  468,  754,  0,    219,  869],
-                   [412,  268,  564,  219,  0,    669],
-                   [996,  400,  138,  869,  669,  0  ]], dtype='double')
+_tdist = np.array([[0, 662, 877, 255, 412, 996],
+                   [662, 0, 295, 468, 268, 400],
+                   [877, 295, 0, 754, 564, 138],
+                   [255, 468, 754, 0, 219, 869],
+                   [412, 268, 564, 219, 0, 669],
+                   [996, 400, 138, 869, 669, 0]], dtype='double')
 
 _ytdist = squareform(_tdist)
 
@@ -141,6 +145,14 @@ class TestLinkage(TestCase):
         "Tests linkage(Y, 'weighted') on the tdist data set."
         Z = linkage(_ytdist, 'weighted')
         Zmlab = eo['linkage-weighted-tdist']
+        eps = 1e-10
+        expectedZ = from_mlab_linkage(Zmlab)
+        self.assertTrue(within_tol(Z, expectedZ, eps))
+
+    def test_linkage_with_unicode_method_name(self):
+        "Tests linkage(Y, u'single') on the tdist data set."
+        Z = linkage(_ytdist, u('single'))
+        Zmlab = eo['linkage-single-tdist']
         eps = 1e-10
         expectedZ = from_mlab_linkage(Zmlab)
         self.assertTrue(within_tol(Z, expectedZ, eps))
@@ -326,7 +338,7 @@ class TestFromMLabLinkage(TestCase):
 
     def test_from_mlab_linkage_single_row(self):
         "Tests from_mlab_linkage on linkage array with single row."
-        expectedZP = np.asarray([[ 0.,  1.,  3.,  2.]])
+        expectedZP = np.asarray([[0., 1., 3., 2.]])
         Z = [[1,2,3]]
         ZP = from_mlab_linkage(Z)
         return self.assertTrue((ZP == expectedZP).all())
@@ -335,11 +347,11 @@ class TestFromMLabLinkage(TestCase):
         "Tests from_mlab_linkage on linkage array with multiple rows."
         Z = np.asarray([[3, 6, 138], [4, 5, 219],
                         [1, 8, 255], [2, 9, 268], [7, 10, 295]])
-        expectedZS = np.array([[   2.,    5.,  138.,    2.],
-                               [   3.,    4.,  219.,    2.],
-                               [   0.,    7.,  255.,    3.],
-                               [   1.,    8.,  268.,    4.],
-                               [   6.,    9.,  295.,    6.]],
+        expectedZS = np.array([[2., 5., 138., 2.],
+                               [3., 4., 219., 2.],
+                               [0., 7., 255., 3.],
+                               [1., 8., 268., 4.],
+                               [6., 9., 295., 6.]],
                               dtype=np.double)
         ZS = from_mlab_linkage(Z)
         self.assertTrue((expectedZS == ZS).all())
@@ -354,7 +366,7 @@ class TestToMLabLinkage(TestCase):
 
     def test_to_mlab_linkage_single_row(self):
         "Tests to_mlab_linkage on linkage array with single row."
-        Z = np.asarray([[ 0.,  1.,  3.,  2.]])
+        Z = np.asarray([[0., 1., 3., 2.]])
         expectedZP = np.asarray([[1,2,3]])
         ZP = to_mlab_linkage(Z)
         return self.assertTrue((ZP == expectedZP).all())
@@ -363,11 +375,11 @@ class TestToMLabLinkage(TestCase):
         "Tests to_mlab_linkage on linkage array with multiple rows."
         expectedZM = np.asarray([[3, 6, 138], [4, 5, 219],
                         [1, 8, 255], [2, 9, 268], [7, 10, 295]])
-        Z = np.array([[   2.,    5.,  138.,    2.],
-                      [   3.,    4.,  219.,    2.],
-                      [   0.,    7.,  255.,    3.],
-                      [   1.,    8.,  268.,    4.],
-                      [   6.,    9.,  295.,    6.]],
+        Z = np.array([[2., 5., 138., 2.],
+                      [3., 4., 219., 2.],
+                      [0., 7., 255., 3.],
+                      [1., 8., 268., 4.],
+                      [6., 9., 295., 6.]],
                      dtype=np.double)
         ZM = to_mlab_linkage(Z)
         self.assertTrue((expectedZM == ZM).all())
@@ -421,6 +433,7 @@ class TestFcluster(TestCase):
         Z = linkage(Y)
         T = fcluster(Z, criterion='maxclust', t=4)
         self.assertTrue(is_isomorphic(T, expectedT))
+
 
 class TestLeaders(TestCase):
     def test_leaders_single(self):
@@ -524,22 +537,22 @@ class TestIsIsomorphic(TestCase):
 class TestIsValidLinkage(TestCase):
     def test_is_valid_linkage_int_type(self):
         "Tests is_valid_linkage(Z) with integer type."
-        Z = np.asarray([[0,   1, 3.0, 2],
-                        [3,   2, 4.0, 3]], dtype=np.int)
+        Z = np.asarray([[0, 1, 3.0, 2],
+                        [3, 2, 4.0, 3]], dtype=np.int)
         self.assertTrue(is_valid_linkage(Z) == False)
         self.assertRaises(TypeError, is_valid_linkage, Z, throw=True)
 
     def test_is_valid_linkage_5_columns(self):
         "Tests is_valid_linkage(Z) with 5 columns."
-        Z = np.asarray([[0,   1, 3.0, 2, 5],
-                        [3,   2, 4.0, 3, 3]], dtype=np.double)
+        Z = np.asarray([[0, 1, 3.0, 2, 5],
+                        [3, 2, 4.0, 3, 3]], dtype=np.double)
         self.assertTrue(is_valid_linkage(Z) == False)
         self.assertRaises(ValueError, is_valid_linkage, Z, throw=True)
 
     def test_is_valid_linkage_3_columns(self):
         "Tests is_valid_linkage(Z) with 3 columns."
-        Z = np.asarray([[0,   1, 3.0],
-                        [3,   2, 4.0]], dtype=np.double)
+        Z = np.asarray([[0, 1, 3.0],
+                        [3, 2, 4.0]], dtype=np.double)
         self.assertTrue(is_valid_linkage(Z) == False)
         self.assertRaises(ValueError, is_valid_linkage, Z, throw=True)
 
@@ -551,55 +564,55 @@ class TestIsValidLinkage(TestCase):
 
     def test_is_valid_linkage_1x4(self):
         "Tests is_valid_linkage(Z) on linkage over 2 observations."
-        Z = np.asarray([[0,   1, 3.0, 2]], dtype=np.double)
+        Z = np.asarray([[0, 1, 3.0, 2]], dtype=np.double)
         self.assertTrue(is_valid_linkage(Z) == True)
 
     def test_is_valid_linkage_2x4(self):
         "Tests is_valid_linkage(Z) on linkage over 3 observations."
-        Z = np.asarray([[0,   1, 3.0, 2],
-                        [3,   2, 4.0, 3]], dtype=np.double)
+        Z = np.asarray([[0, 1, 3.0, 2],
+                        [3, 2, 4.0, 3]], dtype=np.double)
         self.assertTrue(is_valid_linkage(Z) == True)
 
     def test_is_valid_linkage_4_and_up(self):
         "Tests is_valid_linkage(Z) on linkage on observation sets between sizes 4 and 15 (step size 3)."
         for i in xrange(4, 15, 3):
-            y = np.random.rand(i*(i-1)/2)
+            y = np.random.rand(i*(i-1)//2)
             Z = linkage(y)
             self.assertTrue(is_valid_linkage(Z) == True)
 
     def test_is_valid_linkage_4_and_up_neg_index_left(self):
         "Tests is_valid_linkage(Z) on linkage on observation sets between sizes 4 and 15 (step size 3) with negative indices (left)."
         for i in xrange(4, 15, 3):
-            y = np.random.rand(i*(i-1)/2)
+            y = np.random.rand(i*(i-1)//2)
             Z = linkage(y)
-            Z[int(i/2),0] = -2
+            Z[i//2,0] = -2
             self.assertTrue(is_valid_linkage(Z) == False)
             self.assertRaises(ValueError, is_valid_linkage, Z, throw=True)
 
     def test_is_valid_linkage_4_and_up_neg_index_right(self):
         "Tests is_valid_linkage(Z) on linkage on observation sets between sizes 4 and 15 (step size 3) with negative indices (right)."
         for i in xrange(4, 15, 3):
-            y = np.random.rand(i*(i-1)/2)
+            y = np.random.rand(i*(i-1)//2)
             Z = linkage(y)
-            Z[int(i/2),1] = -2
+            Z[i//2,1] = -2
             self.assertTrue(is_valid_linkage(Z) == False)
             self.assertRaises(ValueError, is_valid_linkage, Z, throw=True)
 
     def test_is_valid_linkage_4_and_up_neg_dist(self):
         "Tests is_valid_linkage(Z) on linkage on observation sets between sizes 4 and 15 (step size 3) with negative distances."
         for i in xrange(4, 15, 3):
-            y = np.random.rand(i*(i-1)/2)
+            y = np.random.rand(i*(i-1)//2)
             Z = linkage(y)
-            Z[int(i/2),2] = -0.5
+            Z[i//2,2] = -0.5
             self.assertTrue(is_valid_linkage(Z) == False)
             self.assertRaises(ValueError, is_valid_linkage, Z, throw=True)
 
     def test_is_valid_linkage_4_and_up_neg_counts(self):
         "Tests is_valid_linkage(Z) on linkage on observation sets between sizes 4 and 15 (step size 3) with negative counts."
         for i in xrange(4, 15, 3):
-            y = np.random.rand(i*(i-1)/2)
+            y = np.random.rand(i*(i-1)//2)
             Z = linkage(y)
-            Z[int(i/2),3] = -2
+            Z[i//2,3] = -2
             self.assertTrue(is_valid_linkage(Z) == False)
             self.assertRaises(ValueError, is_valid_linkage, Z, throw=True)
 
@@ -607,22 +620,22 @@ class TestIsValidLinkage(TestCase):
 class TestIsValidInconsistent(TestCase):
     def test_is_valid_im_int_type(self):
         "Tests is_valid_im(R) with integer type."
-        R = np.asarray([[0,   1, 3.0, 2],
-                        [3,   2, 4.0, 3]], dtype=np.int)
+        R = np.asarray([[0, 1, 3.0, 2],
+                        [3, 2, 4.0, 3]], dtype=np.int)
         self.assertTrue(is_valid_im(R) == False)
         self.assertRaises(TypeError, is_valid_im, R, throw=True)
 
     def test_is_valid_im_5_columns(self):
         "Tests is_valid_im(R) with 5 columns."
-        R = np.asarray([[0,   1, 3.0, 2, 5],
-                        [3,   2, 4.0, 3, 3]], dtype=np.double)
+        R = np.asarray([[0, 1, 3.0, 2, 5],
+                        [3, 2, 4.0, 3, 3]], dtype=np.double)
         self.assertTrue(is_valid_im(R) == False)
         self.assertRaises(ValueError, is_valid_im, R, throw=True)
 
     def test_is_valid_im_3_columns(self):
         "Tests is_valid_im(R) with 3 columns."
-        R = np.asarray([[0,   1, 3.0],
-                        [3,   2, 4.0]], dtype=np.double)
+        R = np.asarray([[0, 1, 3.0],
+                        [3, 2, 4.0]], dtype=np.double)
         self.assertTrue(is_valid_im(R) == False)
         self.assertRaises(ValueError, is_valid_im, R, throw=True)
 
@@ -634,19 +647,19 @@ class TestIsValidInconsistent(TestCase):
 
     def test_is_valid_im_1x4(self):
         "Tests is_valid_im(R) on im over 2 observations."
-        R = np.asarray([[0,   1, 3.0, 2]], dtype=np.double)
+        R = np.asarray([[0, 1, 3.0, 2]], dtype=np.double)
         self.assertTrue(is_valid_im(R) == True)
 
     def test_is_valid_im_2x4(self):
         "Tests is_valid_im(R) on im over 3 observations."
-        R = np.asarray([[0,   1, 3.0, 2],
-                        [3,   2, 4.0, 3]], dtype=np.double)
+        R = np.asarray([[0, 1, 3.0, 2],
+                        [3, 2, 4.0, 3]], dtype=np.double)
         self.assertTrue(is_valid_im(R) == True)
 
     def test_is_valid_im_4_and_up(self):
         "Tests is_valid_im(R) on im on observation sets between sizes 4 and 15 (step size 3)."
         for i in xrange(4, 15, 3):
-            y = np.random.rand(i*(i-1)/2)
+            y = np.random.rand(i*(i-1)//2)
             Z = linkage(y)
             R = inconsistent(Z)
             self.assertTrue(is_valid_im(R) == True)
@@ -654,30 +667,30 @@ class TestIsValidInconsistent(TestCase):
     def test_is_valid_im_4_and_up_neg_index_left(self):
         "Tests is_valid_im(R) on im on observation sets between sizes 4 and 15 (step size 3) with negative link height means."
         for i in xrange(4, 15, 3):
-            y = np.random.rand(i*(i-1)/2)
+            y = np.random.rand(i*(i-1)//2)
             Z = linkage(y)
             R = inconsistent(Z)
-            R[int(i/2),0] = -2.0
+            R[i//2,0] = -2.0
             self.assertTrue(is_valid_im(R) == False)
             self.assertRaises(ValueError, is_valid_im, R, throw=True)
 
     def test_is_valid_im_4_and_up_neg_index_right(self):
         "Tests is_valid_im(R) on im on observation sets between sizes 4 and 15 (step size 3) with negative link height standard deviations."
         for i in xrange(4, 15, 3):
-            y = np.random.rand(i*(i-1)/2)
+            y = np.random.rand(i*(i-1)//2)
             Z = linkage(y)
             R = inconsistent(Z)
-            R[int(i/2),1] = -2.0
+            R[i//2,1] = -2.0
             self.assertTrue(is_valid_im(R) == False)
             self.assertRaises(ValueError, is_valid_im, R, throw=True)
 
     def test_is_valid_im_4_and_up_neg_dist(self):
         "Tests is_valid_im(R) on im on observation sets between sizes 4 and 15 (step size 3) with negative link counts."
         for i in xrange(4, 15, 3):
-            y = np.random.rand(i*(i-1)/2)
+            y = np.random.rand(i*(i-1)//2)
             Z = linkage(y)
             R = inconsistent(Z)
-            R[int(i/2),2] = -0.5
+            R[i//2,2] = -0.5
             self.assertTrue(is_valid_im(R) == False)
             self.assertRaises(ValueError, is_valid_im, R, throw=True)
 
@@ -690,19 +703,19 @@ class TestNumObsLinkage(TestCase):
 
     def test_num_obs_linkage_1x4(self):
         "Tests num_obs_linkage(Z) on linkage over 2 observations."
-        Z = np.asarray([[0,   1, 3.0, 2]], dtype=np.double)
+        Z = np.asarray([[0, 1, 3.0, 2]], dtype=np.double)
         self.assertTrue(num_obs_linkage(Z) == 2)
 
     def test_num_obs_linkage_2x4(self):
         "Tests num_obs_linkage(Z) on linkage over 3 observations."
-        Z = np.asarray([[0,   1, 3.0, 2],
-                        [3,   2, 4.0, 3]], dtype=np.double)
+        Z = np.asarray([[0, 1, 3.0, 2],
+                        [3, 2, 4.0, 3]], dtype=np.double)
         self.assertTrue(num_obs_linkage(Z) == 3)
 
     def test_num_obs_linkage_4_and_up(self):
         "Tests num_obs_linkage(Z) on linkage on observation sets between sizes 4 and 15 (step size 3)."
         for i in xrange(4, 15, 3):
-            y = np.random.rand(i*(i-1)/2)
+            y = np.random.rand(i*(i-1)//2)
             Z = linkage(y)
             self.assertTrue(num_obs_linkage(Z) == i)
 
@@ -710,14 +723,14 @@ class TestNumObsLinkage(TestCase):
 class TestLeavesList(TestCase):
     def test_leaves_list_1x4(self):
         "Tests leaves_list(Z) on a 1x4 linkage."
-        Z = np.asarray([[0,   1, 3.0, 2]], dtype=np.double)
+        Z = np.asarray([[0, 1, 3.0, 2]], dtype=np.double)
         node = to_tree(Z)
         self.assertTrue((leaves_list(Z) == [0, 1]).all())
 
     def test_leaves_list_2x4(self):
         "Tests leaves_list(Z) on a 2x4 linkage."
-        Z = np.asarray([[0,   1, 3.0, 2],
-                        [3,   2, 4.0, 3]], dtype=np.double)
+        Z = np.asarray([[0, 1, 3.0, 2],
+                        [3, 2, 4.0, 3]], dtype=np.double)
         node = to_tree(Z)
         self.assertTrue((leaves_list(Z) == [0, 1, 2]).all())
 
@@ -780,19 +793,19 @@ class TestCorrespond(TestCase):
     def test_correspond_2_and_up(self):
         "Tests correspond(Z, y) on linkage and CDMs over observation sets of different sizes."
         for i in xrange(2, 4):
-            y = np.random.rand(i*(i-1)/2)
+            y = np.random.rand(i*(i-1)//2)
             Z = linkage(y)
             self.assertTrue(correspond(Z, y))
         for i in xrange(4, 15, 3):
-            y = np.random.rand(i*(i-1)/2)
+            y = np.random.rand(i*(i-1)//2)
             Z = linkage(y)
             self.assertTrue(correspond(Z, y))
 
     def test_correspond_4_and_up(self):
         "Tests correspond(Z, y) on linkage and CDMs over observation sets of different sizes. Correspondance should be false."
-        for (i, j) in zip(range(2, 4), range(3, 5)) + zip(range(3, 5), range(2, 4)):
-            y = np.random.rand(i*(i-1)/2)
-            y2 = np.random.rand(j*(j-1)/2)
+        for (i, j) in list(zip(list(range(2, 4)), list(range(3, 5)))) + list(zip(list(range(3, 5)), list(range(2, 4)))):
+            y = np.random.rand(i*(i-1)//2)
+            y2 = np.random.rand(j*(j-1)//2)
             Z = linkage(y)
             Z2 = linkage(y2)
             self.assertTrue(correspond(Z, y2) == False)
@@ -800,9 +813,9 @@ class TestCorrespond(TestCase):
 
     def test_correspond_4_and_up_2(self):
         "Tests correspond(Z, y) on linkage and CDMs over observation sets of different sizes. Correspondance should be false."
-        for (i, j) in zip(range(2, 7), range(16, 21)) + zip(range(2, 7), range(16, 21)):
-            y = np.random.rand(i*(i-1)/2)
-            y2 = np.random.rand(j*(j-1)/2)
+        for (i, j) in list(zip(list(range(2, 7)), list(range(16, 21)))) + list(zip(list(range(2, 7)), list(range(16, 21)))):
+            y = np.random.rand(i*(i-1)//2)
+            y2 = np.random.rand(j*(j-1)//2)
             Z = linkage(y)
             Z2 = linkage(y2)
             self.assertTrue(correspond(Z, y2) == False)
@@ -825,7 +838,7 @@ class TestIsMonotonic(TestCase):
 
     def test_is_monotonic_1x4(self):
         "Tests is_monotonic(Z) on 1x4 linkage. Expecting True."
-        Z = np.asarray([[0, 1, 0.3, 2]], dtype=np.double);
+        Z = np.asarray([[0, 1, 0.3, 2]], dtype=np.double)
         self.assertTrue(is_monotonic(Z) == True)
 
     def test_is_monotonic_2x4_T(self):
@@ -876,7 +889,7 @@ class TestIsMonotonic(TestCase):
     def test_is_monotonic_tdist_linkage2(self):
         "Tests is_monotonic(Z) on clustering generated by single linkage on tdist data set. Perturbing. Expecting False."
         Z = linkage(_ytdist, 'single')
-        Z[2,2]=0.0
+        Z[2,2] = 0.0
         self.assertTrue(is_monotonic(Z) == False)
 
     def test_is_monotonic_iris_linkage(self):
@@ -1373,9 +1386,9 @@ def calculate_maximum_distances(Z):
         left = Z[i, 0]
         right = Z[i, 1]
         if left >= n:
-            q[0] = B[left - n]
+            q[0] = B[int(left) - n]
         if right >= n:
-            q[1] = B[right - n]
+            q[1] = B[int(right) - n]
         q[2] = Z[i, 2]
         B[i] = q.max()
     return B
@@ -1391,9 +1404,9 @@ def calculate_maximum_inconsistencies(Z, R, k=3):
         left = Z[i, 0]
         right = Z[i, 1]
         if left >= n:
-            q[0] = B[left - n]
+            q[0] = B[int(left) - n]
         if right >= n:
-            q[1] = B[right - n]
+            q[1] = B[int(right) - n]
         q[2] = R[i, k]
         B[i] = q.max()
     return B

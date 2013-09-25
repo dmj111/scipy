@@ -41,6 +41,7 @@ Global
    :toctree: generated/
 
    anneal - Simulated annealing
+   basinhopping - Basinhopping stochastic optimizer
    brute - Brute force searching optimizer
 
 Scalar function minimizers
@@ -79,7 +80,6 @@ Root finding
 
 Scalar functions
 ----------------
-
 .. autosummary::
    :toctree: generated/
 
@@ -134,27 +134,31 @@ Utility Functions
 .. autosummary::
    :toctree: generated/
 
-   line_search - Return a step that satisfies the strong Wolfe conditions
+   approx_fprime - Approximate the gradient of a scalar function
    check_grad - Check the supplied derivative using finite differences
+   line_search - Return a step that satisfies the strong Wolfe conditions
 
    show_options - Show specific options optimization solvers
 
 """
 
-from optimize import *
-from _minimize import *
-from _root import *
-from minpack import *
-from zeros import *
-from anneal import *
-from lbfgsb import fmin_l_bfgs_b
-from tnc import fmin_tnc
-from cobyla import fmin_cobyla
-from nonlin import *
-from slsqp import fmin_slsqp
-from nnls import nnls
+from __future__ import division, print_function, absolute_import
 
-__all__ = filter(lambda s:not s.startswith('_'),dir())
+from .optimize import *
+from ._minimize import *
+from ._root import *
+from .minpack import *
+from .zeros import *
+from .anneal import *
+from .lbfgsb import fmin_l_bfgs_b
+from .tnc import fmin_tnc
+from .cobyla import fmin_cobyla
+from .nonlin import *
+from .slsqp import fmin_slsqp
+from .nnls import nnls
+from ._basinhopping import basinhopping
+
+__all__ = [s for s in dir() if not s.startswith('_')]
 from numpy.testing import Tester
 test = Tester().test
 bench = Tester().bench

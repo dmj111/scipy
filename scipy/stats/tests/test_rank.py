@@ -1,7 +1,8 @@
+from __future__ import division, print_function, absolute_import
 
 import numpy as np
 from numpy.testing import TestCase, run_module_suite, assert_equal, \
-        assert_array_equal
+    assert_array_equal
 
 from scipy.stats import rankdata, tiecorrect
 
@@ -82,7 +83,7 @@ class TestRankData(TestCase):
         r = rankdata(a)
         assert_array_equal(r, np.array([1.0], dtype=np.float64))
         r = rankdata(data)
-        assert_array_equal(r, np.array([1.0], dtype=np.float64))        
+        assert_array_equal(r, np.array([1.0], dtype=np.float64))
 
     def test_basic(self):
         """Basic tests of stats.rankdata."""
@@ -112,7 +113,7 @@ class TestRankData(TestCase):
         # The docstring states explicitly that the argument is flattened.
         a2d = a.reshape(2, 3)
         r = rankdata(a2d)
-        assert_array_equal(r, expected)        
+        assert_array_equal(r, expected)
 
     def test_large_int(self):
         data = np.array([2**60, 2**60+1], dtype=np.uint64)
@@ -126,6 +127,66 @@ class TestRankData(TestCase):
         data = np.array([2**60, -2**60+1], dtype=np.int64)
         r = rankdata(data)
         assert_array_equal(r, [2.0, 1.0])
+
+    def test_big_tie(self):
+        for n in [10000, 100000, 1000000]:
+            data = np.ones(n, dtype=int)
+            r = rankdata(data)
+            expected_rank = 0.5 * (n + 1)
+            assert_array_equal(r, expected_rank * data,
+                               "test failed with n=%d" % n)
+
+
+_cases = (
+    # values, method, expected
+    ([], 'average', []),
+    ([], 'min', []),
+    ([], 'max', []),
+    ([], 'dense', []),
+    ([], 'ordinal', []),
+    #
+    ([100], 'average', [1.0]),
+    ([100], 'min', [1.0]),
+    ([100], 'max', [1.0]),
+    ([100], 'dense', [1.0]),
+    ([100], 'ordinal', [1.0]),
+    #
+    ([100, 100, 100], 'average', [2.0, 2.0, 2.0]),
+    ([100, 100, 100], 'min', [1.0, 1.0, 1.0]),
+    ([100, 100, 100], 'max', [3.0, 3.0, 3.0]),
+    ([100, 100, 100], 'dense', [1.0, 1.0, 1.0]),
+    ([100, 100, 100], 'ordinal', [1.0, 2.0, 3.0]),
+    #
+    ([100, 300, 200], 'average', [1.0, 3.0, 2.0]),
+    ([100, 300, 200], 'min', [1.0, 3.0, 2.0]),
+    ([100, 300, 200], 'max', [1.0, 3.0, 2.0]),
+    ([100, 300, 200], 'dense', [1.0, 3.0, 2.0]),
+    ([100, 300, 200], 'ordinal', [1.0, 3.0, 2.0]),
+    #
+    ([100, 200, 300, 200], 'average', [1.0, 2.5, 4.0, 2.5]),
+    ([100, 200, 300, 200], 'min', [1.0, 2.0, 4.0, 2.0]),
+    ([100, 200, 300, 200], 'max', [1.0, 3.0, 4.0, 3.0]),
+    ([100, 200, 300, 200], 'dense', [1.0, 2.0, 3.0, 2.0]),
+    ([100, 200, 300, 200], 'ordinal', [1.0, 2.0, 4.0, 3.0]),
+    #
+    ([100, 200, 300, 200, 100], 'average', [1.5, 3.5, 5.0, 3.5, 1.5]),
+    ([100, 200, 300, 200, 100], 'min', [1.0, 3.0, 5.0, 3.0, 1.0]),
+    ([100, 200, 300, 200, 100], 'max', [2.0, 4.0, 5.0, 4.0, 2.0]),
+    ([100, 200, 300, 200, 100], 'dense', [1.0, 2.0, 3.0, 2.0, 1.0]),
+    ([100, 200, 300, 200, 100], 'ordinal', [1.0, 3.0, 5.0, 4.0, 2.0]),
+    #
+    ([10] * 30, 'ordinal', np.arange(1.0, 31.0)),
+)
+
+
+def test_cases():
+
+    def check_case(values, method, expected):
+        r = rankdata(values, method=method)
+        assert_array_equal(r, expected)
+
+    for values, method, expected in _cases:
+        yield check_case, values, method, expected
 
 
 if __name__ == "__main__":

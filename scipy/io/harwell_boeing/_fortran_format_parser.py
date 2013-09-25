@@ -6,6 +6,7 @@ The *Format classes handle conversion between fortran and python format, and
 FortranFormatParser can create *Format instances from raw fortran format
 strings (e.g. '(3I4)', '(10I3)', etc...)
 """
+from __future__ import division, print_function, absolute_import
 
 import re
 import warnings
@@ -42,14 +43,14 @@ class IntFormat(object):
 
         Parameters
         ----------
-        n: int
+        n : int
             max number one wants to be able to represent
-        min: int
+        min : int
             minimum number of characters to use for the format
 
         Returns
         -------
-        res: IntFormat
+        res : IntFormat
             IntFormat instance with reasonable (see Notes) computed width
 
         Notes
@@ -102,14 +103,14 @@ class ExpFormat(object):
 
         Parameters
         ----------
-        n: float
+        n : float
             max number one wants to be able to represent
-        min: int
+        min : int
             minimum number of characters to use for the format
 
         Returns
         -------
-        res: ExpFormat
+        res : ExpFormat
             ExpFormat instance with reasonable (see Notes) computed width
 
         Notes
@@ -135,7 +136,7 @@ class ExpFormat(object):
         """\
         Parameters
         ----------
-        width: int
+        width : int
             number of characters taken by the string (includes space).
         """
         self.width = width
@@ -182,7 +183,7 @@ class Token(object):
 
 class Tokenizer(object):
     def __init__(self):
-        self.tokens = TOKENS.keys()
+        self.tokens = list(TOKENS.keys())
         self.res = [re.compile(TOKENS[i]) for i in self.tokens]
 
     def input(self, s):
@@ -203,7 +204,7 @@ class Tokenizer(object):
                     self.curpos = m.end()
                     return Token(self.tokens[i], m.group(), self.curpos)
             else:
-                raise SyntaxError("Unknown character at position %d (%s)" \
+                raise SyntaxError("Unknown character at position %d (%s)"
                                   % (self.curpos, self.data[curpos]))
 
 
@@ -247,7 +248,7 @@ class FortranFormatParser(object):
                 else:
                     tokens.append(t)
             return self._parse_format(tokens)
-        except SyntaxError, e:
+        except SyntaxError as e:
             raise BadFortranFormat(str(e))
 
     def _get_min(self, tokens):
@@ -263,10 +264,10 @@ class FortranFormatParser(object):
 
     def _parse_format(self, tokens):
         if not tokens[0].type == "LPAR":
-            raise SyntaxError("Expected left parenthesis at position "\
+            raise SyntaxError("Expected left parenthesis at position "
                               "%d (got '%s')" % (0, tokens[0].value))
         elif not tokens[-1].type == "RPAR":
-            raise SyntaxError("Expected right parenthesis at position "\
+            raise SyntaxError("Expected right parenthesis at position "
                               "%d (got '%s')" % (len(tokens), tokens[-1].value))
 
         tokens = tokens[1:-1]
@@ -311,4 +312,3 @@ class FortranFormatParser(object):
         next = tokens.pop(0)
         self._expect(next, tp)
         return next
-

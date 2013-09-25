@@ -1,3 +1,5 @@
+from __future__ import division, print_function, absolute_import
+
 import numpy as np
 from numpy.linalg import inv
 
@@ -7,6 +9,7 @@ from numpy.testing import TestCase, rand, run_module_suite, assert_raises, \
 
 from scipy.linalg import solve_sylvester, solve_lyapunov, \
     solve_discrete_lyapunov, solve_continuous_are, solve_discrete_are
+
 
 class TestSolveLyapunov(TestCase):
 
@@ -41,6 +44,7 @@ class TestSolveLyapunov(TestCase):
         for case in self.cases:
             self.check_continuous_case(case[0], case[1])
             self.check_discrete_case(case[0], case[1])
+
 
 class TestSolveContinuousARE(TestCase):
 
@@ -84,6 +88,7 @@ class TestSolveContinuousARE(TestCase):
         for case in self.cases:
             self.check_case(case[0], case[1], case[2], case[3])
 
+
 class TestSolveDiscreteARE(TestCase):
 
     cases = [
@@ -125,6 +130,7 @@ class TestSolveDiscreteARE(TestCase):
     def test_cases(self):
         for case in self.cases:
             self.check_case(case[0], case[1], case[2], case[3])
+
 
 class TestSolveSylvester(TestCase):
 
